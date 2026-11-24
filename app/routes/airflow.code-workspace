@@ -1,0 +1,23 @@
+{
+	"folders": [
+		{
+			"path": "../../../airflow"
+		},
+		{
+			"path": "../.."
+		},
+		{
+			"path": "../../../superset"
+		},
+		{
+			"path": "../../../proto_dashboard"
+		},
+		{
+			"path": "../../../canary_dagger"
+		},
+		{
+			"path": "../../../tracepic"
+		}
+	],
+	"settings": {}
+}

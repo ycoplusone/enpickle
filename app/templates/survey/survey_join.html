@@ -1,0 +1,478 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+  .container { max-width: 1600px; }
+  #surveyTable td.prize, #surveyTable td.etc { text-align: left; font-size: 13px; }
+  .due-over { color: #aaa; text-decoration: line-through; }   /* 마감 지남 */
+  .due-today { color: #e74c3c; font-weight: bold; }            /* 오늘 마감 */
+  .flag-ai { color: #8e44ad; font-weight: bold; }
+  .flag-pickle { color: #d35400; font-weight: bold; }
+  .flag-human { color: #27ae60; font-weight: bold; }
+  .flag-none { color: #999; }
+.chart-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  justify-content: space-between;
+  padding: 5px;
+}
+.chart-box {
+  flex: 1 1 250px;
+  max-width: 100%;
+  min-width: 260px;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+}
+
+#surveyTable {
+  table-layout: fixed;
+  width: 100%;
+  border-collapse: collapse;
+}
+
+#surveyTable thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+@media (hover: hover) {
+  #surveyTable tbody tr:hover {
+    background-color: #eee;
+  }
+}
+
+
+.rainbow-text {
+  font-weight: 600;
+  background: linear-gradient(
+    90deg,
+    #d66a6a,
+    #d8a15c,
+    #d6cf7a,
+    #7fbf9b,
+    #7a9fd6,
+    #9a86c8,
+    #b68bbf
+  );
+  background-size: 200% 100%;
+  background-position: 50% 50%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: rainbowMove 6s ease-in-out infinite;
+}
+
+@keyframes rainbowMove {
+  0% { background-position: 40% 50%; }
+  50% { background-position: 60% 50%; }
+  100% { background-position: 40% 50%; }
+}
+
+.form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.form-row input[type="text"] {
+  flex: 1 1 180px;
+}
+
+.form-row button {
+  padding: 10px 18px;
+  border: none;
+  border-radius: 4px;
+  background-color: #007bff;
+  color: white;
+  cursor: pointer;
+}
+
+.form-row button:hover {
+  background-color: #0056b3;
+}
+
+.survey-table-wrap {
+  width: 100%;
+  max-height: 800px;
+  overflow: auto;
+}
+
+/* 작업 등록/수정 */
+.job-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-end;
+  padding: 12px;
+  margin-bottom: 16px;
+  background: #fafafa;
+  border: 1px solid #eee;
+  border-radius: 6px;
+}
+.job-form.is-edit { background: #fff8e6; border-color: #f5d48a; }
+.job-form .field { display: flex; flex-direction: column; gap: 4px; }
+.job-form label { font-size: 12px; color: #888; }
+.job-form .f-name { flex: 1 1 200px; }
+.job-form .f-url  { flex: 2 1 280px; }
+.job-form .f-name input, .job-form .f-url input { width: 100%; }
+.job-form .f-sort input { width: 80px; }
+.job-form .f-date input { width: 150px; }
+.job-form .f-prize input { width: 180px; }
+.job-form .f-cnt input { width: 90px; }
+.job-form .f-etc { flex: 1 1 200px; }
+.job-form .f-etc input { width: 100%; }
+.job-form .row-break { flex-basis: 100%; height: 0; }   /* 추가 항목은 다음 줄에 */
+.job-form .mode { font-size: 13px; font-weight: bold; color: #555; flex-basis: 100%; }
+.job-form .btn-job {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  cursor: pointer;
+  font-weight: bold;
+}
+.btn-job-add { background: #28a745; }
+.btn-job-add:hover { background: #1e7e34; }
+.btn-job-upd { background: #fd7e14; }
+.btn-job-upd:hover { background: #d9650b; }
+.btn-job-cancel { background: #6c757d; }
+.btn-job-cancel:hover { background: #545b62; }
+.job-form [hidden] { display: none; }
+
+#surveyTable tbody tr.js-job-row { cursor: pointer; }
+#surveyTable th.th-sort { cursor: pointer; user-select: none; white-space: nowrap; }
+#surveyTable th.th-sort:hover { background: #e8f0fb; }
+#surveyTable th.th-sort .sort-mark { font-size: 11px; color: #999; }
+#surveyTable th.th-sort.asc .sort-mark,
+#surveyTable th.th-sort.desc .sort-mark { color: #3498db; }
+#surveyTable tbody tr.js-job-row:hover td { background: #f3f8ff; }
+#surveyTable tbody tr.is-selected td { background: #fff3cd; }
+
+@media (max-width: 700px) {
+  .job-form .field { flex: 1 1 100%; }
+  .job-form .btn-job { flex: 1 1 0; }
+  #surveyTable tbody tr.is-selected { background: #fff3cd; }
+  .chart-box { min-width: 0; flex-basis: 100%; }
+  .form-row button { flex: 1 1 100%; }
+  .survey-table-wrap { max-height: none; overflow: visible; }
+  #surveyTable { table-layout: auto; }
+}
+</style>
+
+<div class="container py-4">
+
+    <h2 class="page-title">📢참여 통계</h2>
+
+  <form method="POST" action="/survey_join">
+    <div class="form-row">
+      <input type="text" name="base_mm" placeholder="조회년월( ex 202507 )" value="{{ base_mm }}">
+      <input type="text" name="url" placeholder="url 검색" value="{{ url }}" required>
+      <button type="submit">조회</button>
+    </div>
+  </form>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, msg in messages %}
+      <div class="message-box {{ 'is-error' if category == 'error' else '' }}">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <!-- 작업 등록 / 수정 (표의 행을 클릭하면 수정 모드) -->
+  <form class="job-form" id="job-form" method="POST" action="{{ url_for('survey_join.surveyJobAdd') }}">
+    <div class="mode" id="job-mode">➕ 새 작업 등록</div>
+    <input type="hidden" name="base_mm" value="{{ base_mm }}">
+    <input type="hidden" name="url" value="{{ url }}">
+    <input type="hidden" name="org_job_nm" id="org-job-nm" disabled>
+    <input type="hidden" name="org_url" id="org-url" disabled>
+    <input type="hidden" name="org_flag" id="org-flag" disabled>
+    <div class="field f-name">
+      <label for="job-nm">작업명</label>
+      <input type="text" id="job-nm" name="job_nm" maxlength="256" required>
+    </div>
+    <div class="field f-url">
+      <label for="job-url">URL</label>
+      <input type="text" id="job-url" name="job_url" maxlength="512" required placeholder="https://">
+    </div>
+    <div class="field">
+      <label for="job-flag">구분</label>
+      <select id="job-flag" name="flag">
+        <option value="human">human</option>
+        <option value="pickle">pickle</option>
+        <option value="none">none</option>
+      </select>
+    </div>
+    <div class="field f-sort">
+      <label for="job-sort">우선순위</label>
+      <input type="number" id="job-sort" name="sort" value="2" step="1">
+    </div>
+    <div class="row-break"></div>
+    <div class="field f-date">
+      <label for="job-due">마감일</label>
+      <input type="date" id="job-due" name="due_dt">
+    </div>
+    <div class="field f-date">
+      <label for="job-ann">발표일</label>
+      <input type="date" id="job-ann" name="ann_dt">
+    </div>
+    <div class="field f-prize">
+      <label for="job-prize">상품</label>
+      <input type="text" id="job-prize" name="prize_nm" maxlength="64">
+    </div>
+    <div class="field f-cnt">
+      <label for="job-cnt">갯수</label>
+      <input type="text" id="job-cnt" name="prize_cnt" maxlength="64">
+    </div>
+    <div class="field f-etc">
+      <label for="job-etc">기타</label>
+      <input type="text" id="job-etc" name="etc" maxlength="128">
+    </div>
+    <button type="submit" class="btn-job btn-job-add" id="btn-job-add">등록</button>
+    <button type="submit" class="btn-job btn-job-upd" id="btn-job-upd"
+            formaction="{{ url_for('survey_join.surveyJobUpdate') }}" hidden>수정</button>
+    <button type="button" class="btn-job btn-job-cancel" id="btn-job-cancel" hidden>취소</button>
+  </form>
+
+  <div class="chart-container">
+    <div id="chart-sales" class="chart-box"></div>
+    <div id="chart-expense" class="chart-box"></div>
+    <div id="chart-months" class="chart-box"></div>
+  </div>
+
+  <div class="survey-table-wrap">
+    <table id="surveyTable" class="table-cards">
+      <colgroup>
+        <col style="width:12%">  {# 작업명 #}
+        <col style="width:11%">  {# URL #}
+        <col style="width:5%">   {# 구분 #}
+        <col style="width:4%">   {# 우선순위 #}
+        <col style="width:6%">   {# 마감일 #}
+        <col style="width:6%">   {# 발표일 #}
+        <col style="width:9%">   {# 상품 #}
+        <col style="width:4%">   {# 갯수 #}
+        <col style="width:9%">   {# 기타 #}
+        <col style="width:8%">   {# 시작 시간 #}
+        <col style="width:8%">   {# 종료 시간 #}
+        <col style="width:4%">
+        <col style="width:4%">
+        <col style="width:4%">
+        <col style="width:6%">   {# 피클결과 #}
+      </colgroup>
+      <thead>
+        <tr>
+          <th>작업명</th>
+          <th>URL</th>
+          <th>구분</th>
+          <th>우선순위</th>
+          <th class="th-sort" id="th-due" title="클릭하면 마감일 순으로 정렬 (빠른 순 ↔ 늦은 순)">마감일 <span class="sort-mark">↕</span></th>
+          <th>발표일</th>
+          <th>상품</th>
+          <th>갯수</th>
+          <th>기타</th>
+          <th>시작 시간</th>
+          <th>종료 시간</th>
+          <th>시작 횟수</th>
+          <th>완료 횟수</th>
+          <th>일별 횟수</th>
+          <th>피클결과</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if table_rows %}
+          {% for row in table_rows %}
+          {% if row.job_nm == 'Total' and not row.flag %}
+          <tr>
+          {% else %}
+          <tr class="js-job-row" title="클릭하면 위 입력란에서 수정"
+              data-job-nm="{{ row.job_nm or '' }}" data-url="{{ row.url or '' }}" data-flag="{{ row.flag or 'human' }}" data-sort="{{ row.sort if row.sort is not none else 2 }}"
+              data-due="{{ (row.due_dt or '')[:8] }}" data-ann="{{ row.ann_dt or '' }}"
+              data-prize="{{ row.prize_nm or '' }}" data-cnt="{{ row.prize_cnt or '' }}" data-etc="{{ row.etc or '' }}">
+          {% endif %}
+            <td class="cell-title" data-label="작업명">{{ row.job_nm }}</td>
+            <td class="cell-block" data-label="URL">{{ row.url }}</td>
+            <td data-label="구분">{% if row.flag %}<span class="flag-{{ row.flag }}">{{ row.flag }}</span>{% endif %}</td>
+            <td data-label="우선순위">{{ row.sort if row.sort is not none else '' }}</td>
+            <td data-label="마감일">
+              {% set due = (row.due_dt or '')[:8] %}
+              {% if due|length == 8 %}<span class="{{ 'due-over' if due < today else ('due-today' if due == today else '') }}">{{ due[2:4] }}.{{ due[4:6] }}.{{ due[6:8] }}</span>{% endif %}
+            </td>
+            <td data-label="발표일">
+              {% set ann = row.ann_dt or '' %}
+              {% if ann|length == 8 %}{{ ann[2:4] }}.{{ ann[4:6] }}.{{ ann[6:8] }}{% else %}{{ ann }}{% endif %}
+            </td>
+            <td class="prize" data-label="상품">{{ row.prize_nm or '' }}</td>
+            <td data-label="갯수">{{ row.prize_cnt or '' }}</td>
+            <td class="etc" data-label="기타">{{ row.etc or '' }}</td>
+            <td data-label="시작 시간">{{ row.st_dt }}</td>
+            <td data-label="종료 시간">{{ row.ed_dt }}</td>
+            <td data-label="시작 횟수">{{ row.st_ct }}</td>
+            <td data-label="완료 횟수">{{ row.ed_ct }}</td>
+            <td data-label="일별 횟수">{{ row.tot_cnt }}</td>
+            {# 피클결과: 성공(t_cnt) / 다음 줄 이상(f_cnt), Total 행은 값이 없어 빈칸 #}
+            <td data-label="피클결과" class="text-nowrap">{% if row.t_cnt is not none and row.t_cnt != '' %}성공 : {{ row.t_cnt }}<br>이상 : {{ row.f_cnt }}{% endif %}</td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="15" class="text-center py-3">조회된 데이터가 없습니다.</td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block script %}
+
+<script>
+  const salesData = {{ sales_data | tojson | safe}};  
+
+  const salesChart = toastui.Chart.lineChart({
+    el: document.getElementById('chart-sales'),
+    data: salesData,
+    options: {
+      chart: { title: '시간별', width: 'auto', height: 200 },
+      xAxis: { type: 'category' },
+      yAxis: { title: '개수' },
+      series: { showDot: true, dataLabels: { visible: true, offsetY: -10 } },
+      legend: { align: 'top', selectable: false, visible: false },
+      exportMenu: { visible: false }
+    }
+  });
+</script>  
+<script>
+
+  const expenseData = {{ expense_data | tojson | safe }};
+  const expenseChart = toastui.Chart.lineChart({
+    el: document.getElementById('chart-expense'),
+    data: expenseData,
+    options: {
+      chart: { title: '일별', width: 'auto', height: 200 },
+      xAxis: { type: 'category' },
+      yAxis: { title: '개수' },
+      series: { showDot: true, dataLabels: { visible: true, offsetY: -10 } },
+      legend: { align: 'top', selectable: false, visible: false },
+      exportMenu: { visible: false }
+    }
+  });
+
+  </script>  
+<script>
+  const monthsData = {{ months_data | tojson | safe }};
+  const monthsChart = toastui.Chart.lineChart({
+    el: document.getElementById('chart-months'),
+    data: monthsData,
+    options: {
+      chart: { title: '월별', width: 'auto', height: 200 },
+      xAxis: { type: 'category' },
+      yAxis: { title: '개수' },
+      series: { showDot: true, dataLabels: { visible: true, offsetY: -10 } },
+      legend: { align: 'top', selectable: false, visible: false },
+      exportMenu: { visible: false }
+    }
+  });
+</script>
+<script>
+  // 작업 등록/수정: 표의 행 클릭 → 입력란에 채우고 수정 모드
+  // (차트 스크립트 오류와 무관하게 동작하도록 별도 <script> 로 분리)
+  (function () {
+    const form = document.getElementById('job-form');
+    const f = {
+      name: document.getElementById('job-nm'),
+      url:  document.getElementById('job-url'),
+      flag: document.getElementById('job-flag'),
+      sort: document.getElementById('job-sort'),
+      due:   document.getElementById('job-due'),
+      ann:   document.getElementById('job-ann'),
+      prize: document.getElementById('job-prize'),
+      cnt:   document.getElementById('job-cnt'),
+      etc:   document.getElementById('job-etc'),
+      orgName: document.getElementById('org-job-nm'),
+      orgUrl:  document.getElementById('org-url'),
+      orgFlag: document.getElementById('org-flag'),
+    };
+    const mode = document.getElementById('job-mode');
+    const btnAdd = document.getElementById('btn-job-add');
+    const btnUpd = document.getElementById('btn-job-upd');
+    const btnCancel = document.getElementById('btn-job-cancel');
+    let selected = null;
+    // 'YYYYMMDD' → 날짜 입력칸 값 'YYYY-MM-DD' (형식이 다르면 빈 값)
+    const ymdToInput = v => /^\d{8}$/.test(v || '') ? `${v.slice(0, 4)}-${v.slice(4, 6)}-${v.slice(6, 8)}` : '';
+
+    function setEdit(tr) {
+      if (selected) selected.classList.remove('is-selected');
+      selected = tr;
+      const on = !!tr;
+      if (on) {
+        tr.classList.add('is-selected');
+        f.name.value = f.orgName.value = tr.dataset.jobNm;
+        f.url.value  = f.orgUrl.value  = tr.dataset.url;
+        f.orgFlag.value = tr.dataset.flag;
+        // 기존 ai 기록은 선택 목록에 없으므로 pickle 로 바꿔서 수정
+        f.flag.value = tr.dataset.flag === 'ai' ? 'pickle' : tr.dataset.flag;
+        f.sort.value = tr.dataset.sort;
+        f.due.value = ymdToInput(tr.dataset.due);
+        f.ann.value = ymdToInput(tr.dataset.ann);
+        f.prize.value = tr.dataset.prize;
+        f.cnt.value = tr.dataset.cnt;
+        f.etc.value = tr.dataset.etc;
+        mode.textContent = '✏️ 선택한 작업 수정 (같은 작업명·URL·구분의 기록 전체가 함께 수정됩니다)';
+      } else {
+        f.name.value = f.url.value = '';
+        f.flag.value = 'human';
+        f.sort.value = '2';
+        f.due.value = f.ann.value = f.prize.value = f.cnt.value = f.etc.value = '';
+        mode.textContent = '➕ 새 작업 등록';
+      }
+      // 수정 모드에서만 원래 값(org_*)을 전송
+      [f.orgName, f.orgUrl, f.orgFlag].forEach(el => { el.disabled = !on; });
+      form.classList.toggle('is-edit', on);
+      btnUpd.hidden = btnCancel.hidden = !on;
+      btnAdd.textContent = on ? '새로 등록' : '등록';
+      if (on) {
+        form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        f.name.focus();
+      }
+    }
+
+    document.querySelectorAll('#surveyTable .js-job-row').forEach(tr => {
+      tr.addEventListener('click', () => setEdit(tr === selected ? null : tr));
+    });
+    btnCancel.addEventListener('click', () => setEdit(null));
+    btnUpd.addEventListener('click', e => {
+      if (!confirm('선택한 작업을 수정할까요?')) e.preventDefault();
+    });
+  })();
+</script>
+<script>
+// 마감일 헤더 클릭 → 화면에서만 정렬 (빠른 순 → 늦은 순 → 원래 순서), Total 행은 항상 맨 위, 마감일 없는 행은 맨 아래
+(function () {
+  const th = document.getElementById('th-due');
+  const tbody = document.querySelector('#surveyTable tbody');
+  if (!th || !tbody) return;
+  const rows = Array.from(tbody.querySelectorAll('tr.js-job-row'));
+  rows.forEach((tr, i) => { tr.dataset.orgIdx = i; });   // 원래(조회) 순서 기억
+  const mark = th.querySelector('.sort-mark');
+  const STATES = ['asc', 'desc', ''];
+  let state = '';
+
+  th.addEventListener('click', () => {
+    state = STATES[(STATES.indexOf(state) + 1) % STATES.length];
+    th.classList.toggle('asc', state === 'asc');
+    th.classList.toggle('desc', state === 'desc');
+    mark.textContent = state === 'asc' ? '▲' : state === 'desc' ? '▼' : '↕';
+
+    const sorted = rows.slice().sort((a, b) => {
+      if (!state) return a.dataset.orgIdx - b.dataset.orgIdx;
+      const da = a.dataset.due || '', db = b.dataset.due || '';
+      if (!da !== !db) return da ? -1 : 1;                 // 마감일 없는 행은 항상 뒤
+      const cmp = da.localeCompare(db) * (state === 'asc' ? 1 : -1);
+      return cmp || a.dataset.orgIdx - b.dataset.orgIdx;   // 같은 마감일은 원래 순서
+    });
+    sorted.forEach(tr => tbody.appendChild(tr));            // Total 등 다른 행은 제자리(맨 위) 유지
+  });
+})();
+</script>
+{% endblock %}

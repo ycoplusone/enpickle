@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+.table-wrap {
+    max-height: 600px;
+    overflow-y: auto;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    background: #fff;
+}
+
+.sticky-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.sticky-table th,
+.sticky-table td {
+    padding: 8px 10px;
+    border: 1px solid #ddd;
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+}
+
+.sticky-table thead th {
+    position: sticky;
+    top: 0;
+    background: #f8f9fa;
+    z-index: 2;
+}
+
+.sticky-table th:nth-child(3),
+.sticky-table td:nth-child(3) {
+    width: 25%;
+}
+
+@media (max-width: 700px) {
+    .table-wrap { max-height: none; overflow: visible; border: none; background: transparent; }
+    .sticky-table { table-layout: auto; }
+    .sticky-table td:nth-child(3) { width: 100%; }
+}
+</style>
+
+<div class="container py-4">
+    <h2 class="page-title">✨니콘 현황</h2>
+
+    
+
+    {% if error_message %}
+    <div class="alert alert-danger" role="alert">
+        {{ error_message }}
+    </div>
+    {% endif %}
+
+    <div class="table-wrap">
+        <table class="sticky-table table-cards">
+            <thead>
+                <tr>
+                    <th>구분</th>
+                    <th>브랜드</th>
+                    <th>상품명</th>
+                    <th>생성일(old)</th>
+                    <th>폴더수</th>
+                    <th>잔여건</th>
+                    <th>완료건</th>
+                    <th>이상건</th>
+                    <th>처리건</th>
+                    <th>기록일</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if rows %}
+                    {% for row in rows %}
+                    <tr>
+                        <td data-label="구분">{{ row.div_nm }}</td>
+                        <td data-label="브랜드">{{ row.brand }}</td>
+                        <td data-label="상품명" class="cell-title">{{ row.prod }}</td>
+                        <td data-label="생성일(old)">{{ row.fold_date }}</td>
+                        <td data-label="폴더수">{{ row.fold_cnt }}</td>
+                        <td data-label="잔여건">{{ row.bal_qty }}</td>
+                        <td data-label="완료건">{{ row.suc_qty }}</td>
+                        <td data-label="이상건">{{ row.chk_qty }}</td>
+                        <td data-label="처리건">{{ row.sale_qty }}</td>
+                        <td data-label="기록일">{{ row.c_date }}</td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="10" class="text-center py-3">조회된 데이터가 없습니다.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block script %}
+{% endblock %}

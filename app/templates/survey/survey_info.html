@@ -1,0 +1,135 @@
+{% extends layout or "base.html" %}
+
+{% block content %}
+<style>
+    .filter-box form { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .filter-box select { min-width: 140px; }
+    .filter-box .filter-search button {
+        padding: 10px 14px;
+        border: none;
+        border-radius: 4px;
+        background: #007bff;
+        color: white;
+        cursor: pointer;
+        font-weight: bold;
+    }
+    .filter-box .filter-search button:hover { background: #0056b3; }
+    .filter-box .filter-all { margin-left: auto; }
+
+    .info-table { table-layout: fixed; }
+    .info-table td.desc { text-align: left; }
+
+    @media (max-width: 700px) {
+        .info-table { table-layout: auto; }
+        .filter-box .filter-all { margin-left: 0; width: 100%; }
+        .filter-box .filter-all .btn-done { width: 100%; }
+        .filter-box .filter-search { width: 100%; }
+        .filter-box .filter-search select { flex: 1 1 auto; }
+    }
+</style>
+
+<div class="container py-4">
+
+    <h2 class="page-title">📊수집 데이터 관리</h2>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, msg in messages %}
+          <div class="message-box">{{ msg }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <div class="filter-box">
+        <form method="GET" class="filter-search">
+            <label>확인여부:</label>
+            <select name="is_verified">
+                <option value="all" {{ 'selected' if is_verified == 'all' else '' }}>전체</option>
+                <option value="Y" {{ 'selected' if is_verified == 'Y' else '' }}>Y</option>
+                <option value="N" {{ 'selected' if is_verified == 'N' else '' }}>N</option>
+            </select>
+            <button type="submit">조회</button>
+        </form>
+
+        <form method="POST" class="filter-all" onsubmit="return confirm('정말로 모든 항목을 일괄 완료 처리하시겠습니까?');">
+            <input type="hidden" name="update_all" value="all">
+            <button type="submit" class="btn-done">일괄완료</button>
+        </form>
+    </div>
+
+    <p class="result-count mobile-only" style="margin-top: 20px;">총 <strong>{{ table_rows|length }}</strong>건</p>
+
+    <div class="table-scroll" style="margin-top: 20px;">
+        <table class="info-table table-cards">
+            <colgroup>
+                <col style="width:5%">
+                <col style="width:13%">
+                <col style="width:9%">
+                <col style="width:9%">
+                <col style="width:9%">
+                <col style="width:15%">
+                <col style="width:40%">
+            </colgroup>
+            <thead>
+                <tr>
+                    <th>No</th>
+                    <th>수집일시</th>
+                    <th>관리</th>
+                    <th>점수</th>
+                    <th>URL</th>
+                    <th>
+                        <div class="tip-container" tabindex="0">
+                            검색어
+                            <span class="tip-box">
+                                QR검출(4) / 단어 검출(2) / 설명 검출(1)<br>
+                                (ai(8) / 상세 QR검출(4) / 상세 단어 검출(2))
+                            </span>
+                        </div>
+                    </th>
+                    <th>주석(총 {{ table_rows|length }}건)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if table_rows %}
+                    {% for row in table_rows %}
+                    <tr>
+                        <td data-label="No">{{ loop.index }}</td>
+                        <td data-label="수집일시">{{ row.collection_dt }}</td>
+                        <td data-label="관리">
+                            <form method="POST" style="display:inline;">
+                                <input type="hidden" name="update_url" value="{{ row.url }}">
+                                <button type="submit" class="btn-done" {% if row.is_verified %}disabled{% endif %}>완료</button>
+                            </form>
+                        </td>
+                        <td data-label="점수">{{ row.score }}({{ row.ex_score }})</td>
+                        <td data-label="URL">
+                            {% if row.url %}
+                                <a href="{{ row.url }}" target="_blank" class="link-text" onclick="copyUrl(this);">{{ '★링크' if 'instagram' in row.url.lower() else '링크' }}</a>
+                            {% endif %}
+                        </td>
+                        <td data-label="검색어">
+                            <div class="tip-container" tabindex="0">
+                                {{ row.has_qr }}/{{ row.has_text_survey }}/{{ row.has_text_satisfaction }}({{ row.detail_ai }}/{{ row.detail_qr }}/{{ row.detail_txt }})
+                                <span class="tip-box">{{ row.words or '' }}</span>
+                            </div>
+                        </td>
+                        <td class="desc cell-block" data-label="주석">{{ row.description }}</td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="7">조회된 데이터가 없습니다.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+function copyUrl(element) {
+  const url = element.href;
+  navigator.clipboard.writeText(url).catch(() => {});
+}
+</script>
+{% endblock %}

@@ -1,0 +1,113 @@
+# Flask 기반 웹 애플리케이션 프로젝트
+
+## 1. 개요
+
+이 프로젝트는 기존에 PHP로 구현되었던 웹 애플리케이션을 Python의 Flask 프레임워크를 사용하여 재개발하는 것을 목표로 합니다.
+
+Flask의 유연성과 Python 생태계의 강력한 라이브러리들을 활용하여 성능, 확장성, 그리고 유지보수성을 개선하고자 합니다.
+
+## 2. 주요 특징
+
+- **현대적인 웹 프레임워크**: 가볍고 확장성이 뛰어난 Flask를 기반으로 개발합니다.
+- **RESTful API 설계**: 표준화된 RESTful API 구조를 통해 클라이언트와 서버 간의 명확한 통신을 지향합니다.
+- **유지보수성 및 확장성**: Python 기반으로 코드의 가독성을 높이고, 향후 기능 확장이 용이한 구조로 설계합니다.
+
+## 3. 설치 및 실행 방법
+
+### 3.1. 사전 요구사항
+
+프로젝트 실행을 위해 다음 라이브러리가 필요합니다.
+`requirements.txt` 파일을 생성하여 관리하는 것을 권장합니다.
+
+```bash
+pip install -r requirements.txt
+```
+
+### 3.2. 실행
+
+1.  Jupyter Notebook을 실행하고, `app.py`의 코드를 셀에 복사하여 붙여넣습니다.
+2.  해당 셀을 실행합니다.
+3.  "Flask 서버가 백그라운드에서 실행 중입니다! http://127.0.0.1:5000 에 접속해 보세요." 메시지가 출력되면 서버가 정상적으로 실행된 것입니다.
+4.  웹 브라우저나 API 테스트 도구(cURL, Postman 등)를 사용하여 서버에 접속할 수 있습니다.
+
+## 4. API 엔드포인트
+
+### 4.1. `GET /`
+- **설명**: 서버가 실행 중인지 확인하는 기본 엔드포인트입니다.
+- **응답**: `Hello, World! Flask is running on Jupyter Notebook!` 문자열을 반환합니다.
+
+### 4.2. `GET /api/data`
+- **설명**: 간단한 JSON 데이터를 제공하는 API 엔드포인트입니다.
+- **응답**:
+  ```json
+  {
+    "status": "success",
+    "message": "노트북에서 보내는 데이터입니다."
+  }
+  ```
+
+***********************************************************
+
+## 6. 일자별 작업 내역
+
+*이 섹션에는 각 날짜별 주요 작업 내용, 이슈, 해결 과정 등을 기록합니다.*
+### 2026-11-02
+- **작업:** Windows Terminal 새 창에 작업용 탭(OracleCloud, 시각화, 시각화[실행], flask, flask[실행], TextCatch)을 한 번에 여는 스크립트를 기록함.
+- **이슈:** 특이사항 없음
+- **결과:** 아래 스크립트 원문을 그대로 보관함.
+
+```bat
+wt -w new new-tab --title "OracleCloud";^
+new-tab --title "시각화" wsl -e bash -lic "cd ~/proto_dashboard && claude\; exec bash" ;^
+new-tab --title "시각화[실행]" wsl -e bash -lic "cd ~/proto_dashboard && source .venv/bin/activate && streamlit run app.py\; exec bash";^
+new-tab --title "flask" wsl -e bash -lic "cd ~/flask && claude\; exec bash";^
+new-tab --title "flask[실행]" wsl -e bash -lic "cd ~/flask && source ~/flask/.venv/bin/activate && python ~/flask/run.py\; exec bash";^
+new-tab --title "퀀트" wsl -e bash -lic "cd ~/canary_dagger &&claude\; exec bash";^
+new-tab --title "퀀트[실행]" wsl -e bash -lic "cd ~/canary_dagger && source ~/canary_dagger/.venv/bin/activate && python main.py \; exec bash";^
+new-tab --title "TextCatch" powershell -NoExit -Command "cd D:\android\textcatch\; Get-Location\; claude";
+```
+
+### 2026-08-06
+- **작업:** Docker 배포 환경 구성 (`Dockerfile`, `docker-compose.yml`, `.dockerignore`, `docker-install.sh` 작성).
+- **이슈:** 특이사항 없음
+- **결과:** `./docker-install.sh` 실행으로 이미지 빌드~컨테이너 실행까지 자동화함. gunicorn으로 5000 포트 서비스, `.env`는 `env_file`로 런타임 주입.
+
+### 2026-08-05
+- **작업:** 신규 팀원 온보딩을 위해 프로젝트 구조/핵심 파일/코드 흐름/실행 방법을 정리한 `ONBOARDING.md` 작성.
+- **이슈:** 특이사항 없음
+- **결과:** 디렉토리 구조, 핵심 파일 5개, 주요 코드 흐름(인증/로그인/홈), 설치·실행·테스트 방법을 문서화함.
+
+### 2026-07-22
+- **작업:** oci cloud 에 ubuntu 서버 생성및 소스배포 작업(shell를 이용한 ci/cd)
+- **이슈:** 가상메모리 확보, python 가상화, ci/cd 스크립트 생성과 contab 등록
+- **결과:** 새벽 1시 git소스를 기준으로 재배포 하도록 등록함.
+
+### 2026-07-21 - 1
+- **작업:** github 업로드 실수로 프로젝트 다 날림.
+- **이슈:** 초기 git push작업은 신중히 하자.
+- **결과:** test.md 에 wsl의 vscode 백업 복구 스크립트 만듬.
+
+### 2026-07-21
+- **작업:** 기기 인증 로그인 화면 생성 기기에 token을 생성, db에 토큰을 저장하여 비교하여 인증여부를 확인함.
+- **이슈:** 특이사항 없음
+- **결과:** 의도대로 처리가 됨을 확인함.
+
+### 2026-07-20
+- **작업:** 현황 , 통계 , 수집데이터 관리 , 검색 키워드 관리, 단어 관리, 제외 단어 관리 각가그이 페이지 모두 전환.
+- **이슈:** 이전과 동일하게 명시적으로 작업을 지시하지 않는다면 기존의 코드를 건들여서 재개발을 몇차례 반복함.
+- **결과:** 몇차례 프롬프트 수정으로 전환 작업을 간소화 하였고 문제 없이 테스트 함
+
+### 2026-07-16
+- **작업:** 기존 php 와 copilot AI 를 이용해서 전환 작업 진행.
+- **이슈:** route , logic , view 부분을 명확히 구분해서 지시를 해야 한다.
+- **결과:** 지시이후 생성된 스크립트들의 변화를 검토후 테스트 진행
+
+### 2026-07-15
+- **작업:** flask 프로젝트 생성
+- **이슈:** 기존 wsl 환경에 구축
+- **결과:** app.py 실행시 이상 없이 동작 한다.
+
+### 2026-09-07
+- **작업:** detail_ai 컬럼 추가로 화면과 로직 수정
+- **이슈:** 오류 발생으로 수정
+- **결과:** survey_info.py 수정

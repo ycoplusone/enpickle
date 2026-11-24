@@ -1,0 +1,1320 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .container { max-width: 1200px; }
+    .page-title { color: #c0392b; }
+    /* 제목 옆 알록달록 문구 */
+    .love-msg {
+        display: inline-flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 0 8px;
+        margin-left: 10px;
+        font-size: 0.6em;
+        font-weight: bold;
+        vertical-align: middle;
+    }
+    .love-msg span {
+        background-clip: text;
+        -webkit-background-clip: text;
+        color: transparent;
+        background-size: 200% auto;
+        animation: love-flow 3s linear infinite;
+    }
+    .love-1 { background-image: linear-gradient(90deg, #ff6b6b, #feca57, #ff6b6b); }
+    .love-2 { background-image: linear-gradient(90deg, #48dbfb, #a29bfe, #48dbfb); }
+    .love-3 { background-image: linear-gradient(90deg, #ff9ff3, #1dd1a1, #ff9ff3); }
+    @keyframes love-flow { to { background-position: 200% center; } }
+    @media (max-width: 700px) {
+        .love-msg { display: flex; margin: 4px 0 0; }
+    }
+
+    /* 페이징 */
+    .pager {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 4px;
+        margin: 20px 0;
+    }
+    .pager a, .pager span {
+        min-width: 36px;
+        padding: 6px 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        text-align: center;
+        text-decoration: none;
+        color: #333;
+        background: #fff;
+    }
+    .pager a:hover { background: #f5f5f5; }
+    .pager .current { background: #e74c3c; border-color: #e74c3c; color: #fff; font-weight: bold; }
+    .pager .disabled { color: #ccc; }
+
+    .search-form {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        gap: 10px;
+        margin-bottom: 16px;
+        padding: 16px;
+        background: #fafafa;
+        border: 1px solid #eee;
+        border-radius: 6px;
+    }
+    .search-form .field {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .search-form label {
+        font-size: 13px;
+        color: #888;
+    }
+    .input-clear { position: relative; }
+    .search-form .js-shrink input[type="date"] { width: 100%; }   /* 축소된 field 폭을 따라가도록 */
+    /* 조회 조건 입력칸 폭 축소: 시작일/종료일 15px, 발신번호/수신번호/메시지 내용 기본 폭의 56% (데스크톱만, 하단 script / 모바일은 50% 배치 유지) */
+    .input-clear input { width: 100%; padding-right: 30px; }
+    .input-clear .btn-clear {
+        position: absolute;
+        top: 50%;
+        right: 6px;
+        transform: translateY(-50%);
+        width: 22px;
+        height: 22px;
+        min-width: 22px;
+        min-height: 0;             /* style.css 모바일 button min-height: 40px 무효화 */
+        padding: 0;
+        border: none;
+        border-radius: 50%;
+        background: #ccc;
+        color: white;
+        font-size: 16px;
+        line-height: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        -webkit-appearance: none;
+        appearance: none;
+        cursor: pointer;
+    }
+    .input-clear .btn-clear:hover { background: #999; }
+    .input-clear input:placeholder-shown + .btn-clear { display: none; }
+
+    .btn-search, .btn-excel, .btn-zip {
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 10px 18px;
+        cursor: pointer;
+        font-weight: bold;
+        text-decoration: none;
+        display: inline-block;
+        text-align: center;
+    }
+    .btn-search { background: #e74c3c; }
+    .btn-search:hover { background: #c0392b; }
+    .btn-excel { background: #217346; }
+    .btn-excel:hover { background: #1a5c38; color: white; }
+    .btn-zip { background: #f39c12; }
+    .btn-zip:hover { background: #d68910; color: white; }
+
+    .list-header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 10px;
+        padding: 8px 0;
+        /* 스크롤해도 기능 버튼이 보이도록 상단 고정 */
+        position: sticky;
+        top: 0;
+        z-index: 50;               /* 모바일 상단 메뉴(.nav-menu z-index: 100) 아래 */
+        background: #fff;
+    }
+    .list-header .actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    .msg-table { table-layout: fixed; font-size: 14px; }
+
+    .thumb {
+        max-width: 90px;
+        max-height: 90px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+    .js-fill {
+        color: #2c7be5;
+        text-decoration: underline;
+        cursor: pointer;
+    }
+    .js-fill:hover { color: #c0392b; }
+    .phone-line {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        white-space: nowrap;
+    }
+    .phone-line + .phone-line { margin-top: 4px; }
+    .btn-url {
+        flex: none;
+        padding: 2px 6px;
+        min-height: 0;             /* style.css 모바일 button min-height: 40px 무효화 */
+        border: 1px solid #2c7be5;
+        border-radius: 4px;
+        background: #fff;
+        color: #2c7be5;
+        font-size: 12px;
+        line-height: 1.4;
+        cursor: pointer;
+    }
+    .btn-url:hover { background: #2c7be5; color: #fff; }
+    .btn-url.is-copied { background: #27ae60; border-color: #27ae60; color: #fff; }
+    .copy-toast {
+        position: fixed;
+        left: 50%;
+        bottom: 30px;
+        transform: translateX(-50%);
+        padding: 8px 16px;
+        border-radius: 4px;
+        background: rgba(0, 0, 0, 0.75);
+        color: #fff;
+        font-size: 14px;
+        z-index: 1200;
+        pointer-events: none;
+    }
+    /* URL 미리보기 패널: 같은 화면 오른쪽에 iframe 으로 표시 (모바일은 전체 화면) */
+    .url-panel {
+        position: fixed;
+        top: 0;
+        right: 0;
+        width: min(560px, 50vw);
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        background: #fff;
+        border-left: 1px solid #ddd;
+        box-shadow: -4px 0 16px rgba(0, 0, 0, 0.15);
+        z-index: 900;
+    }
+    .url-panel[hidden] { display: none; }
+    .url-panel-head {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 10px;
+        border-bottom: 1px solid #eee;
+        background: #fafafa;
+        font-size: 13px;
+    }
+    .url-panel-head .url-phone { font-weight: bold; color: #27ae60; white-space: nowrap; }
+    .url-panel-head .url-text {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: #888;
+    }
+    .url-panel-head button {
+        flex: none;
+        padding: 4px 8px;
+        min-height: 0;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        background: #fff;
+        cursor: pointer;
+        font-size: 13px;
+    }
+    .url-panel-head button:hover, .url-panel-head .btn-ext:hover { background: #eee; }
+    .url-panel-head .btn-ext {
+        flex: none;
+        padding: 4px 8px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        background: #fff;
+        font-size: 13px;
+        line-height: 1.4;
+        text-decoration: none;
+    }
+    .url-panel iframe { flex: 1; width: 100%; border: none; }
+    .url-panel iframe[hidden], .url-panel-img[hidden] { display: none; }
+    /* 첨부 이미지: 패널 크기에 맞춰 전체가 보이도록 축소 (스크롤 없음) */
+    .url-panel-img {
+        flex: 1;
+        min-height: 0;          /* flex 자식이 이미지 크기만큼 늘어나 스크롤 생기는 것 방지 */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 8px;
+        background: #f4f4f4;
+        overflow: hidden;
+    }
+    .url-panel-img img {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+        display: block;
+    }
+    @media (max-width: 700px) {
+        .url-panel { width: 100vw; border-left: none; }
+    }
+
+    /* 새 창(팝업)이 열려 있는 동안 표시하는 캡쳐 막대 */
+    .popup-bar {
+        position: fixed;
+        right: 16px;
+        bottom: 16px;
+        z-index: 950;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-radius: 6px;
+        background: #2c3e50;
+        color: #fff;
+        font-size: 13px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+    }
+    .popup-bar[hidden] { display: none; }
+    .popup-bar .hint { color: #bbb; font-size: 12px; }
+    .popup-bar button {
+        padding: 4px 10px;
+        min-height: 0;
+        border: none;
+        border-radius: 4px;
+        background: #e74c3c;
+        color: #fff;
+        cursor: pointer;
+        font-size: 13px;
+    }
+
+    /* 화면캡쳐 영역 선택 오버레이 */
+    .cap-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 1100;
+        display: flex;
+        flex-direction: column;
+        background: rgba(0, 0, 0, 0.85);
+    }
+    .cap-overlay[hidden] { display: none; }
+    .cap-bar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 12px;
+        background: #222;
+        color: #eee;
+        font-size: 13px;
+    }
+    .cap-bar .cap-hint { flex: 1; min-width: 160px; }
+    .cap-bar button {
+        padding: 6px 12px;
+        min-height: 0;
+        border: none;
+        border-radius: 4px;
+        background: #555;
+        color: #fff;
+        cursor: pointer;
+        font-size: 13px;
+    }
+    .cap-bar button.primary { background: #e74c3c; }
+    .cap-bar button:disabled { background: #444; color: #888; cursor: not-allowed; }
+    .cap-stage {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 10px;
+    }
+    .cap-wrap { position: relative; line-height: 0; cursor: crosshair; user-select: none; touch-action: none; }
+    .cap-wrap img { max-width: calc(100vw - 20px); max-height: calc(100vh - 80px); pointer-events: none; }
+    .cap-sel {
+        position: absolute;
+        border: 2px dashed #e74c3c;
+        background: rgba(231, 76, 60, 0.15);
+        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);   /* 선택 영역 밖은 어둡게 */
+        pointer-events: none;
+    }
+    .cap-sel[hidden] { display: none; }
+    .msg-table td.barcode { font-family: monospace; font-size: 13px; word-break: break-all; }
+    .gift-y { color: #27ae60; font-weight: bold; }
+    .gift-n { color: #e74c3c; font-weight: bold; }
+    .gift-a { color: #999; }
+    .gift-select {
+        width: 100%;
+        padding: 4px 2px;
+        font-size: 13px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+    .gift-select option { color: #333; font-weight: normal; }
+    .gift-select.gift-y { border-color: #27ae60; background: #eafaf1; }
+    .gift-select.gift-n { border-color: #e74c3c; background: #fdedec; }
+    .gift-select.is-saving { opacity: 0.5; }
+    .gift-score { font-size: 12px; color: #888; margin-top: 2px; }
+    .dely-tm { font-size: 12px; color: #888; }
+    .dely-tm.is-late { color: #e67e22; font-weight: bold; }   /* 지연이 있으면 강조 */
+    .use-select {
+        width: 100%;
+        padding: 4px 2px;
+        font-size: 13px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+    .use-select option { color: #333; font-weight: normal; }
+    .use-select.use-y { color: #2c7be5; }
+    .use-select.use-n { color: #999; background: #f2f2f2; }
+    .use-select.use-a { color: #e67e22; border-color: #e67e22; background: #fef5e7; }
+    .use-select.is-saving { opacity: 0.5; }
+    /* 삭제(N) 상태 행은 흐리게 */
+    .msg-table tr.is-deleted td { color: #aaa; }
+    .msg-table tr.is-deleted .thumb { opacity: 0.4; }
+    .no-data { padding: 40px; color: #999; }
+
+    .btn-delete {
+        background: #c0392b;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 10px 18px;
+        cursor: pointer;
+        font-weight: bold;
+    }
+    .btn-delete:hover { background: #a93226; }
+    .btn-delete:disabled { background: #ccc; cursor: not-allowed; }
+    .btn-confirm {
+        background: #2980b9;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 10px 18px;
+        cursor: pointer;
+        font-weight: bold;
+    }
+    .btn-confirm:hover { background: #1f6391; }
+    .btn-confirm:disabled { background: #ccc; cursor: not-allowed; }
+
+    .msg-table input[type="checkbox"],
+    .select-all-label input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+        vertical-align: middle;
+    }
+    .msg-table tr.is-selected td { background: #fff4f2; }
+    .select-all-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        color: #555;
+    }
+
+    @media (max-width: 700px) {
+        .search-form { padding: 12px; }
+        .search-form .field { flex: 1 1 calc(50% - 5px); min-width: 0; }
+        .search-form .field input { width: 100%; }
+        .btn-search { flex: 1 1 100%; }
+        /* 모바일은 화면이 좁아 조회 건수는 두고 버튼만 고정, 고정 메뉴 바로 아래에 붙임 */
+        .list-header { display: contents; }
+        .list-header .result-count { margin-bottom: 10px; }
+        .list-header .actions {
+            width: 100%;
+            margin-bottom: 10px;
+            padding: 8px 0;
+            position: sticky;
+            top: var(--nav-height, 50px);
+            z-index: 50;
+            background: #fff;
+        }
+        .list-header .actions a { flex: 1 1 0; padding: 10px 8px; }
+        .msg-table { table-layout: auto; }
+        .msg-table tr.is-selected { background: #fff4f2; border-color: #f1b0a8; }
+        .msg-table tr.is-selected td { background: transparent; }
+        .btn-delete, .btn-confirm { flex: 1 1 0; padding: 10px 8px; }
+        .thumb { max-width: 160px; max-height: 160px; }
+    }
+
+    /* 메시지 내용: 기본 4줄만 보이고 [더보기] 클릭 시 전체 표시 */
+    .msg-body {
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 4;
+        line-clamp: 4;
+        overflow: hidden;
+        word-break: break-all;
+    }
+    .msg-body.is-open {
+        display: block;
+        -webkit-line-clamp: unset;
+        line-clamp: none;
+    }
+    .btn-more {
+        margin-top: 4px;
+        padding: 0;
+        min-height: 0;             /* style.css 모바일 button min-height: 40px 무효화 */
+        border: none;
+        background: none;
+        color: #2c7be5;
+        font-size: 13px;
+        cursor: pointer;
+    }
+    .btn-more:hover { text-decoration: underline; }
+</style>
+
+<div class="container py-4">
+    <h2 class="page-title">📩 수신 메시지 조회
+        <span class="love-msg">
+            <span class="love-1">사랑해</span>
+            <span class="love-2">많이 사랑해</span>
+            <span class="love-3">진짜 사랑해</span> 💕
+        </span>
+    </h2>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, msg in messages %}
+          <div class="message-box {{ 'is-error' if category == 'error' else '' }}">{{ msg }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <form id="search-form" class="search-form" method="GET" action="/textcatch">
+        <div class="field js-shrink" data-shrink-px="15">
+            <label for="start_dt">시작일 (base_dt)</label>
+            <input type="date" id="start_dt" name="start_dt" value="{{ start_dt_view }}">
+        </div>
+        <div class="field js-shrink" data-shrink-px="15">
+            <label for="end_dt">종료일 (base_dt)</label>
+            <input type="date" id="end_dt" name="end_dt" value="{{ end_dt_view }}">
+        </div>
+        <div class="field js-shrink">
+            <label for="sender">발신번호</label>
+            <div class="input-clear">
+                <input type="text" id="sender" name="sender" value="{{ sender }}" placeholder="예: 010123">
+                <button type="button" class="btn-clear" aria-label="지우기" tabindex="-1">&times;</button>
+            </div>
+        </div>
+        <div class="field js-shrink">
+            <label for="receiver">수신번호</label>
+            <div class="input-clear">
+                <input type="text" id="receiver" name="receiver" value="{{ receiver }}" placeholder="예: 010123">
+                <button type="button" class="btn-clear" aria-label="지우기" tabindex="-1">&times;</button>
+            </div>
+        </div>
+        <div class="field js-shrink">
+            <label for="keyword">메시지 내용</label>
+            <div class="input-clear">
+                <input type="text" id="keyword" name="keyword" value="{{ keyword }}" placeholder="메시지 내용 / 바코드">
+                <button type="button" class="btn-clear" aria-label="지우기" tabindex="-1">&times;</button>
+            </div>
+        </div>
+        <div class="field">
+            <label for="msg_type">구분</label>
+            <select id="msg_type" name="msg_type">
+                <option value="" {{ 'selected' if not msg_type else '' }}>전체</option>
+                <option value="MMS" {{ 'selected' if msg_type == 'MMS' else '' }}>MMS</option>
+                <option value="SMS" {{ 'selected' if msg_type == 'SMS' else '' }}>SMS</option>
+            </select>
+        </div>
+        <div class="field">
+            <label for="gift_yn">대상</label>
+            <select id="gift_yn" name="gift_yn">
+                <option value="" {{ 'selected' if not gift_yn else '' }}>전체</option>
+                <option value="A" {{ 'selected' if gift_yn == 'A' else '' }}>A(미)</option>
+                <option value="N" {{ 'selected' if gift_yn == 'N' else '' }}>N(노)</option>
+                <option value="Y" {{ 'selected' if gift_yn == 'Y' else '' }}>Y(네)</option>
+            </select>
+        </div>
+        <div class="field">
+            <label for="use_yn">상태</label>
+            <select id="use_yn" name="use_yn">
+                <option value="Y" {{ 'selected' if use_yn == 'Y' else '' }}>Y(사용)</option>
+                <option value="N" {{ 'selected' if use_yn == 'N' else '' }}>N(삭제)</option>
+                <option value="A" {{ 'selected' if use_yn == 'A' else '' }}>A(확인)</option>
+            </select>
+        </div>
+        <button type="submit" class="btn-search">조회</button>
+    </form>
+
+    <div class="list-header">
+        <div class="result-count">
+            조회 기간 : {{ start_dt }} ~ {{ end_dt }} / 총 <strong>{{ total_count }}</strong> 건
+            (이미지 {{ image_count }} 건)
+        </div>
+        {# 현재 조회 조건을 그대로 넘겨 화면과 동일한 대상을 내려받음 #}
+        <div class="actions">
+            <form id="delete-form" method="POST" action="/textcatch/delete" style="display:contents;">
+                {# 삭제 후 같은 조회 조건으로 돌아오기 위한 값 #}
+                <input type="hidden" name="start_dt" value="{{ start_dt }}">
+                <input type="hidden" name="end_dt" value="{{ end_dt }}">
+                <input type="hidden" name="sender" value="{{ sender }}">
+                <input type="hidden" name="receiver" value="{{ receiver }}">
+                <input type="hidden" name="keyword" value="{{ keyword }}">
+                <input type="hidden" name="msg_type" value="{{ msg_type }}">
+                <input type="hidden" name="gift_yn" value="{{ gift_yn }}">
+                <input type="hidden" name="use_yn" value="{{ use_yn }}">
+                <input type="hidden" name="page_size" value="{{ page_size }}">
+                <input type="hidden" name="page" value="{{ page }}">
+                <button type="submit" class="btn-delete" id="btn-delete" disabled>🗑 선택 삭제</button>
+                <button type="submit" class="btn-confirm" id="btn-confirm" formaction="/textcatch/confirm" disabled>✔ 선택 확인</button>
+            </form>
+            <a class="btn-excel"
+               href="/textcatch/excel?start_dt={{ start_dt }}&end_dt={{ end_dt }}&sender={{ sender|urlencode }}&receiver={{ receiver|urlencode }}&keyword={{ keyword|urlencode }}&msg_type={{ msg_type }}&gift_yn={{ gift_yn }}&use_yn={{ use_yn }}">
+                ⬇ 엑셀
+            </a>
+            <a class="btn-zip"
+               href="/textcatch/images?start_dt={{ start_dt }}&end_dt={{ end_dt }}&sender={{ sender|urlencode }}&receiver={{ receiver|urlencode }}&keyword={{ keyword|urlencode }}&msg_type={{ msg_type }}&gift_yn={{ gift_yn }}&use_yn={{ use_yn }}">
+                🗂 이미지
+            </a>
+            {# 한 화면 최대 건수 (조회 폼과 연결, 바꾸면 바로 1페이지부터 다시 조회) #}
+            <select id="page_size" name="page_size" form="search-form" title="표시 건수"
+                    onchange="document.getElementById('search-form').submit();">
+                <option value="50" {{ 'selected' if page_size != 'all' else '' }}>50개</option>
+                <option value="all" {{ 'selected' if page_size == 'all' else '' }}>전체</option>
+            </select>
+        </div>
+    </div>
+
+    {% if list_rows %}
+    <p class="mobile-only" style="margin-bottom: 10px;">
+        <label class="select-all-label">
+            <input type="checkbox" class="js-check-all"> 전체 선택
+        </label>
+    </p>
+    {% endif %}
+
+    <table class="msg-table table-cards">
+        <colgroup>
+            <col style="width: 44px;">
+            <col style="width: 70px;">
+            <col style="width: 130px;">
+            <col style="width: 160px;">  {# 수신번호: 번호 옆 URL 버튼 공간 확보 130 -> 160 #}
+            <col>
+            <col style="width: 110px;">
+            <col style="width: 140px;">  {# 바코드 (기프티콘 Code128 12~16자리) #}
+            <col style="width: 90px;">  {# 수신 시간 (yy.MM.dd / HH:mm / (지연분) 세 줄), 지연시간 컬럼은 여기로 합침 #}
+            <col style="width: 90px;">
+            <col style="width: 90px;">  {# 상태 #}
+        </colgroup>
+        <thead>
+            <tr>
+                <th><input type="checkbox" class="js-check-all" title="전체 선택"></th>
+                <th>ID</th>
+                <th>발신번호</th>
+                <th>수신번호</th>
+                <th>메시지 내용</th>
+                <th>첨부 이미지</th>
+                <th>바코드</th>
+                <th>수신 시간</th>
+                <th>대상</th>
+                <th>상태</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if list_rows %}
+                {% for row in list_rows %}
+                <tr>
+                    <td data-label="선택">
+                        <input type="checkbox" name="ids" value="{{ row.id }}" form="delete-form" class="js-check-row">
+                    </td>
+                    <td data-label="ID">{{ row.id }}</td>
+                    <td data-label="발신번호">
+                        {% if row.sender %}<span class="js-fill" data-target="sender" data-value="{{ row.sender }}" title="조회 조건에 입력">{{ row.sender }}</span>{% endif %}
+                    </td>
+                    <td data-label="수신번호">
+                        {# phone_numbers(본회선,듀얼 콤마 구분)를 한 줄에 하나씩 표시, 없으면 receiver 표시 #}
+                        {# 수신번호는 국가번호 등 형식이 달라도 찾을 수 있도록 뒤 8자리만 전달 #}
+                        {% set phones = (row.phone_numbers or row.receiver or '').split(',') | map('trim') | reject('equalto', '') | list %}
+                        {% for phone in phones %}
+                        <div class="phone-line">
+                            <span class="js-fill" data-target="receiver" data-value="{{ phone[-8:] }}" title="조회 조건에 입력">{{ phone }}</span>
+                            {% if row.extracted_url %}
+                            {# 번호를 클립보드에 복사한 뒤 URL을 새 창(팝업)으로 열기 #}
+                            <button type="button" class="btn-url js-open-url" data-url="{{ row.extracted_url }}" data-phone="{{ phone }}" title="번호 복사 + URL 열기">🔗</button>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </td>
+                    <td class="text-left cell-block" data-label="메시지 내용">
+                        <div class="msg-body">{{ row.message_body }}</div>
+                        <button type="button" class="btn-more" hidden>더보기</button>
+                    </td>
+                    <td data-label="첨부 이미지">
+                        {% if row.image_filename %}
+                            {# 클릭 시 오른쪽 패널에 표시 (Ctrl/휠 클릭은 기존처럼 새 탭) #}
+                            <a href="/textcatch/image/{{ row.image_filename }}" target="_blank" class="js-open-img"
+                               data-phone="{{ phones[0] if phones else (row.receiver or '') }}" title="오른쪽 패널에서 보기">
+                                <img class="thumb" src="/textcatch/image/{{ row.image_filename }}" alt="{{ row.image_filename }}">
+                            </a>
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    {# 수신 시간은 yy.MM.dd / HH:mm 두 줄로 간소화 #}
+                    {# 수신 시간 아래 줄에 지연시간(수신 → 서버 저장까지 걸린 분) 표시 #}
+                    <td data-label="바코드" class="barcode">
+                        {% for code in (row.barcode or '').split(',') if code %}<div>{{ code }}</div>{% else %}-{% endfor %}
+                    </td>
+                    <td data-label="수신 시간">{% if row.received_at %}{{ row.received_at.strftime('%y.%m.%d') }}<br>{{ row.received_at.strftime('%H:%M') }}{% else %}-{% endif %}
+                        {% if row.dely_tm is not none %}<div class="dely-tm{{ ' is-late' if row.dely_tm > 0 else '' }}">({{ row.dely_tm }}분)</div>{% endif %}
+                    </td>
+                    <td data-label="대상">
+                        {# 바꾸면 바로 저장 (A 로 되돌리면 점수 0 으로 초기화 → 자동 판별 다시 수행) #}
+                        <select class="gift-select gift-{{ row.gift_yn|lower }}" data-id="{{ row.id }}" data-prev="{{ row.gift_yn }}" title="대상 변경 (바로 저장)">
+                            <option value="A" {{ 'selected' if row.gift_yn == 'A' else '' }}>A(미)</option>
+                            <option value="N" {{ 'selected' if row.gift_yn == 'N' else '' }}>N(노)</option>
+                            <option value="Y" {{ 'selected' if row.gift_yn == 'Y' else '' }}>Y(네)</option>
+                        </select>
+                        <div class="gift-score">({{ row.gift_score }})</div>
+                    </td>
+                    <td data-label="상태">
+                        {# 바꾸면 바로 저장 (Y 사용 / N 삭제 / A 확인) #}
+                        <select class="use-select use-{{ row.use_yn|lower }}" data-id="{{ row.id }}" data-prev="{{ row.use_yn }}" title="상태 변경 (바로 저장)">
+                            <option value="Y" {{ 'selected' if row.use_yn == 'Y' else '' }}>Y(사용)</option>
+                            <option value="N" {{ 'selected' if row.use_yn == 'N' else '' }}>N(삭제)</option>
+                            <option value="A" {{ 'selected' if row.use_yn == 'A' else '' }}>A(확인)</option>
+                        </select>
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr><td colspan="10" class="no-data">조회된 수신 메시지가 없습니다.</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+
+    {# URL 미리보기 패널 (🔗 버튼 클릭 시 같은 화면 안에서 iframe 으로 열림, 모든 행이 이 패널 하나를 공유) #}
+    <div class="url-panel" id="url-panel" hidden>
+        <div class="url-panel-head">
+            <span class="url-phone" id="url-panel-phone"></span>
+            <span class="url-text" id="url-panel-url"></span>
+            <button type="button" id="url-panel-copy" title="번호 다시 복사">📋</button>
+            <button type="button" id="url-panel-popup" title="사이트가 안 보이면 새 창으로 열기">↗ 새 창</button>
+            <button type="button" id="url-panel-capture" title="화면캡쳐 (영역 선택 후 저장)">📷</button>
+            {# 확장 프로그램 설치/업데이트 파일 (localhost 는 화면 공유가 되어 설치 안내가 뜨지 않으므로 항상 표시) #}
+            <a class="btn-ext" href="/textcatch/capture_extension.zip" title="화면캡쳐 확장 프로그램 설치/업데이트 파일(zip) 받기">🧩</a>
+            <button type="button" id="url-panel-close" title="닫기">&times;</button>
+        </div>
+        <iframe id="url-panel-frame" title="URL 미리보기" referrerpolicy="no-referrer"></iframe>
+        <div class="url-panel-img" id="url-panel-img" hidden><img alt="첨부 이미지"></div>
+    </div>
+
+    {# 새 창(팝업)으로 연 경우 캡쳐 막대 (확장 프로그램 필요) #}
+    <div class="popup-bar" id="popup-bar" hidden>
+        <span>새 창: <b id="popup-bar-phone"></b></span>
+        <span class="hint">새 창의 📷 캡쳐 또는 Alt+Shift+S</span>
+        <button type="button" id="popup-bar-capture" title="새 창 화면캡쳐">📷 새 창 캡쳐</button>
+    </div>
+
+    {# 화면캡쳐 영역 선택: 캡쳐한 이미지 위에서 드래그로 영역 지정 #}
+    <div class="cap-overlay" id="cap-overlay" hidden>
+        <div class="cap-bar">
+            <span class="cap-hint">패널 영역이 자동 선택됩니다 (Enter 저장 / 드래그로 다시 선택) · 파일명: <b id="cap-filename"></b></span>
+            <button type="button" class="primary" id="cap-save-sel" disabled>선택 영역 저장</button>
+            <button type="button" id="cap-save-panel">패널 영역 저장</button>
+            <button type="button" id="cap-save-all">전체 저장</button>
+            <button type="button" id="cap-cancel">취소</button>
+        </div>
+        <div class="cap-stage">
+            <div class="cap-wrap" id="cap-wrap">
+                <img id="cap-img" alt="캡쳐 이미지">
+                <div class="cap-sel" id="cap-sel" hidden></div>
+            </div>
+        </div>
+    </div>
+
+    {# 페이징 (현재 조회 조건을 유지한 채 page 만 변경) #}
+    {% if total_pages > 1 %}
+    {% macro page_url(p) -%}
+        /textcatch?start_dt={{ start_dt }}&end_dt={{ end_dt }}&sender={{ sender|urlencode }}&receiver={{ receiver|urlencode }}&keyword={{ keyword|urlencode }}&msg_type={{ msg_type }}&gift_yn={{ gift_yn }}&use_yn={{ use_yn }}&page_size={{ page_size }}&page={{ p }}
+    {%- endmacro %}
+    <nav class="pager">
+        {% if page > 1 %}
+            <a href="{{ page_url(1) }}" title="처음">«</a>
+            <a href="{{ page_url(page - 1) }}" title="이전">‹</a>
+        {% else %}
+            <span class="disabled">«</span>
+            <span class="disabled">‹</span>
+        {% endif %}
+        {% for p in range(page_start, page_end + 1) %}
+            {% if p == page %}
+                <span class="current">{{ p }}</span>
+            {% else %}
+                <a href="{{ page_url(p) }}">{{ p }}</a>
+            {% endif %}
+        {% endfor %}
+        {% if page < total_pages %}
+            <a href="{{ page_url(page + 1) }}" title="다음">›</a>
+            <a href="{{ page_url(total_pages) }}" title="마지막">»</a>
+        {% else %}
+            <span class="disabled">›</span>
+            <span class="disabled">»</span>
+        {% endif %}
+    </nav>
+    {% endif %}
+</div>
+
+<script>
+// 모바일 고정 버튼이 상단 메뉴 바로 아래에 붙도록 메뉴 높이 전달
+function syncNavHeight() {
+    const nav = document.querySelector('.nav-menu');
+    document.documentElement.style.setProperty('--nav-height', nav.offsetHeight + 'px');
+}
+syncNavHeight();
+window.addEventListener('resize', syncNavHeight);
+
+// 조회 조건 입력칸 폭 축소 (데스크톱만)
+//   data-shrink-px 가 있으면 그만큼(px) 축소, 없으면 SHRINK_RATE 비율로 축소
+(function () {
+    const SHRINK_RATE = 0.56;  // 발신번호/수신번호/메시지 내용: 기본 폭의 56% (80% 에서 30% 더 축소)
+    const desktop = window.matchMedia('(min-width: 701px)');
+    const fields = document.querySelectorAll('.search-form .js-shrink');
+
+    function apply() {
+        fields.forEach(f => { f.style.width = ''; });          // 기본 폭으로 되돌린 뒤 측정
+        if (!desktop.matches) return;                           // 모바일은 CSS 50% 배치 사용
+        const widths = Array.from(fields, f => f.offsetWidth);
+        fields.forEach((f, i) => {
+            const px = parseInt(f.dataset.shrinkPx, 10);
+            const w = isNaN(px) ? widths[i] * SHRINK_RATE : widths[i] - px;
+            f.style.width = Math.round(w) + 'px';
+        });
+    }
+    apply();
+    desktop.addEventListener('change', apply);
+})();
+
+// 조회 조건 입력값 지우기 (x 버튼)
+document.querySelectorAll('.input-clear .btn-clear').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const input = btn.previousElementSibling;
+        input.value = '';
+        input.focus();
+    });
+});
+
+// 리스트의 발신/수신번호 클릭 시 조회 조건에 값 입력
+// 메시지 내용 더보기/접기 (4줄을 넘는 메시지에만 버튼 표시)
+function syncMoreButtons() {
+    document.querySelectorAll('.msg-body').forEach(body => {
+        const btn = body.nextElementSibling;
+        if (body.classList.contains('is-open')) return;   // 펼친 상태는 유지
+        btn.hidden = body.scrollHeight <= body.clientHeight + 1;
+    });
+}
+document.querySelectorAll('.btn-more').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const body = btn.previousElementSibling;
+        const open = body.classList.toggle('is-open');
+        btn.textContent = open ? '접기' : '더보기';
+    });
+});
+syncMoreButtons();
+window.addEventListener('resize', syncMoreButtons);   // 화면 폭이 바뀌면 4줄 초과 여부도 바뀜
+
+// 상태(use_yn) 콤보박스: 바꾸면 바로 저장, 실패하면 이전 값으로 되돌림
+const USE_LABEL = { Y: '사용', N: '삭제', A: '확인' };
+document.querySelectorAll('.use-select').forEach(sel => {
+    sel.closest('tr').classList.toggle('is-deleted', sel.value === 'N');
+    sel.addEventListener('change', async () => {
+        const prev = sel.dataset.prev;
+        const value = sel.value;
+        sel.disabled = true;
+        sel.classList.add('is-saving');
+        try {
+            const res = await fetch('/textcatch/use_yn', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: sel.dataset.id, use_yn: value }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.ok) throw new Error(data.message || ('HTTP ' + res.status));
+            sel.dataset.prev = data.use_yn;
+            sel.value = data.use_yn;
+            sel.className = 'use-select use-' + data.use_yn.toLowerCase();
+            sel.closest('tr').classList.toggle('is-deleted', data.use_yn === 'N');
+            showToast(`ID ${sel.dataset.id} 상태 → ${data.use_yn}(${USE_LABEL[data.use_yn]})`);
+        } catch (err) {
+            sel.value = prev;
+            alert('상태 변경 실패: ' + err.message);
+        } finally {
+            sel.disabled = false;
+            sel.classList.remove('is-saving');
+        }
+    });
+});
+
+// 대상(gift_yn) 콤보박스: 바꾸면 바로 저장, 실패하면 이전 값으로 되돌림
+document.querySelectorAll('.gift-select').forEach(sel => {
+    sel.addEventListener('change', async () => {
+        const prev = sel.dataset.prev;
+        const value = sel.value;
+        if (value === 'A' && !confirm('A(미확인)로 되돌리면 점수가 0 으로 초기화되고 자동 판별을 다시 합니다. 변경할까요?')) {
+            sel.value = prev;
+            return;
+        }
+        sel.disabled = true;
+        sel.classList.add('is-saving');
+        try {
+            const res = await fetch('/textcatch/gift_yn', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: sel.dataset.id, gift_yn: value }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.ok) throw new Error(data.message || ('HTTP ' + res.status));
+            sel.dataset.prev = data.gift_yn;
+            sel.value = data.gift_yn;
+            sel.className = 'gift-select gift-' + data.gift_yn.toLowerCase();
+            sel.nextElementSibling.textContent = `(${data.gift_score})`;
+            showToast(`ID ${sel.dataset.id} 대상 → ${data.gift_yn}`);
+        } catch (err) {
+            sel.value = prev;
+            alert('대상 변경 실패: ' + err.message);
+        } finally {
+            sel.disabled = false;
+            sel.classList.remove('is-saving');
+        }
+    });
+});
+
+document.querySelectorAll('.js-fill').forEach(el => {
+    el.addEventListener('click', () => {
+        const input = document.getElementById(el.dataset.target);
+        input.value = el.dataset.value;
+        input.focus();
+    });
+});
+
+// 수신번호 옆 URL 버튼: 번호를 클립보드에 복사하고 URL을 새 창(팝업)으로 열기
+function copyText(value) {
+    // 새 창이 열려 포커스를 잃기 전에 복사: execCommand(동기, http 에서도 동작) 우선, 실패 시 Clipboard API
+    if (legacyCopy(value)) return Promise.resolve(true);
+    if (navigator.clipboard && window.isSecureContext) {
+        return navigator.clipboard.writeText(value).then(() => true, () => false);
+    }
+    return Promise.resolve(false);
+}
+function legacyCopy(value) {
+    const ta = document.createElement('textarea');
+    ta.value = value;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    return ok;
+}
+function showToast(msg) {
+    const t = document.createElement('div');
+    t.className = 'copy-toast';
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 1500);
+}
+// URL 패널: 하나의 iframe 패널을 모든 🔗 버튼이 공유 (다른 번호를 누르면 같은 패널 내용만 바뀜)
+const urlPanel = {
+    el:    document.getElementById('url-panel'),
+    frame: document.getElementById('url-panel-frame'),
+    phone: document.getElementById('url-panel-phone'),
+    url:   document.getElementById('url-panel-url'),
+    imgBox: document.getElementById('url-panel-img'),
+    // isImage: 첨부 이미지면 iframe 대신 <img> 로 패널에 맞춰 표시
+    open(url, phone, isImage) {
+        const img = this.imgBox.querySelector('img');
+        if (isImage) {
+            this.frame.src = 'about:blank';
+            img.src = url;
+        } else {
+            img.removeAttribute('src');
+            if (this.frame.src !== url) this.frame.src = url;
+        }
+        this.frame.hidden = !!isImage;
+        this.imgBox.hidden = !isImage;
+        this.phone.textContent = phone;
+        this.url.textContent = url;
+        this.url.title = url;
+        this.el.hidden = false;
+    },
+    close() {
+        this.el.hidden = true;
+        this.frame.src = 'about:blank';
+        this.imgBox.querySelector('img').removeAttribute('src');
+    },
+};
+function notifyCopied(ok, phone, btn) {
+    if (ok) {
+        if (btn) {
+            btn.classList.add('is-copied');
+            setTimeout(() => btn.classList.remove('is-copied'), 1500);
+        }
+        showToast(`${phone} 복사됨`);
+    } else {
+        prompt('번호를 복사하세요 (Ctrl+C)', phone);
+    }
+}
+document.querySelectorAll('.js-open-url').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const phone = btn.dataset.phone;
+        copyText(phone).then(ok => notifyCopied(ok, phone, btn));
+        urlPanel.open(btn.dataset.url, phone);
+    });
+});
+// 첨부 이미지: 새 탭 대신 오른쪽 패널에 표시 (같은 서버 이미지라 iframe 으로 바로 보임, 📷 캡쳐도 그대로 사용)
+document.querySelectorAll('.js-open-img').forEach(a => {
+    a.addEventListener('click', e => {
+        if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;   // 새 탭으로 열기는 그대로 허용
+        e.preventDefault();
+        urlPanel.open(a.href, a.dataset.phone || '', true);
+    });
+});
+document.getElementById('url-panel-copy').addEventListener('click', () => {
+    const phone = urlPanel.phone.textContent;
+    copyText(phone).then(ok => notifyCopied(ok, phone));
+});
+// 사이트가 iframe 표시를 막는 경우(X-Frame-Options 등) 대비: 이름 있는 팝업 하나를 재사용
+document.getElementById('url-panel-popup').addEventListener('click', () => {
+    const w = Math.min(1000, screen.availWidth), h = Math.min(800, screen.availHeight);
+    const left = Math.max(0, (screen.availWidth - w) / 2), top = Math.max(0, (screen.availHeight - h) / 2);
+    // noopener 를 쓰지 않아야 확장 프로그램이 "이 화면이 연 새 창"을 찾을 수 있음
+    const win = window.open(urlPanel.url.textContent, 'textcatch_url', `popup=yes,width=${w},height=${h},left=${left},top=${top}`);
+    popupState.open(win, urlPanel.phone.textContent);
+});
+
+// 새 창(팝업) 상태: 캡쳐 파일명에 쓸 번호를 기억하고, 열려 있는 동안 캡쳐 막대 표시
+const popupState = {
+    win: null,
+    phone: '',
+    timer: null,
+    bar: document.getElementById('popup-bar'),
+    open(win, phone) {
+        this.win = win;
+        this.phone = phone;
+        document.getElementById('popup-bar-phone').textContent = phone;
+        this.bar.hidden = !hasCaptureExtension();   // 새 창 캡쳐는 확장 프로그램이 있어야 가능
+        clearInterval(this.timer);
+        this.timer = setInterval(() => {            // 새 창이 닫히면 막대 숨김
+            if (!this.win || this.win.closed) {
+                this.bar.hidden = true;
+                clearInterval(this.timer);
+            }
+        }, 1000);
+    },
+};
+document.getElementById('url-panel-close').addEventListener('click', () => urlPanel.close());
+
+// ===== 화면캡쳐 =====
+// 패널(iframe) 안은 다른 사이트라 페이지 코드로 직접 그릴 수 없어서,
+// 1) 확장 프로그램이 있으면 확장 프로그램으로 현재 탭을 찍음 (http 가능, 확인 창 없음)
+// 2) 없으면 브라우저 화면 공유(getDisplayMedia)로 찍음 (https 또는 localhost 접속에서만 동작)
+// 찍은 뒤 영역을 잘라 PNG 로 저장한다.
+const capture = {
+    overlay: document.getElementById('cap-overlay'),
+    wrap:    document.getElementById('cap-wrap'),
+    img:     document.getElementById('cap-img'),
+    sel:     document.getElementById('cap-sel'),
+    btnSel:  document.getElementById('cap-save-sel'),
+    canvas:  null,      // 캡쳐 원본
+    panelRect: null,    // 캡쳐 원본 기준 패널(iframe) 영역
+    filename: '',
+    rect: null,         // 캡쳐 원본 기준 선택 영역 {x, y, w, h}
+};
+
+function capFilename(phone) {
+    const d = new Date(), p = n => String(n).padStart(2, '0');
+    const ts = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+    return `${(phone || 'capture').replace(/[^0-9A-Za-z-]/g, '')}_${ts}.png`;
+}
+
+// 화면 공유는 첫 캡쳐 때 한 번만 허락받고, 페이지를 떠날 때까지 이어 둔다.
+// 이후 캡쳐는 이어져 있는 공유 화면에서 프레임만 꺼내므로 확인 창이 다시 뜨지 않음.
+// (브라우저 상단의 "공유 중지"를 누르면 끊기고, 다음 캡쳐 때 다시 한 번 확인 창이 뜸)
+const share = { stream: null, video: null };
+
+async function ensureShare() {
+    if (share.stream && share.stream.getVideoTracks().some(t => t.readyState === 'live')) return false;
+    const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { displaySurface: 'browser' },
+        audio: false,
+        preferCurrentTab: true,          // 크롬: 현재 탭을 바로 선택
+        selfBrowserSurface: 'include',
+    });
+    const video = document.createElement('video');
+    video.muted = true;
+    video.srcObject = stream;
+    await video.play();
+    // 사용자가 브라우저의 "공유 중지"를 누르면 정리 → 다음 캡쳐 때 다시 요청
+    stream.getVideoTracks().forEach(t => t.addEventListener('ended', stopShare));
+    share.stream = stream;
+    share.video = video;
+    return true;   // 새로 공유 시작함
+}
+function stopShare() {
+    if (share.stream) share.stream.getTracks().forEach(t => t.stop());
+    share.stream = null;
+    share.video = null;
+}
+window.addEventListener('pagehide', stopShare);   // 페이지 이동/새로고침/닫기 시 공유 종료
+
+// 확장 프로그램(extension/textcatch_capture)이 설치되어 있으면 http 접속에서도 확인 창 없이 캡쳐
+function hasCaptureExtension() {
+    return document.documentElement.dataset.textcatchCapture === '1';
+}
+function dataUrlToCanvas(dataUrl) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+            const c = document.createElement('canvas');
+            c.width = img.naturalWidth;
+            c.height = img.naturalHeight;
+            c.getContext('2d').drawImage(img, 0, 0);
+            resolve(c);
+        };
+        img.onerror = () => reject(new Error('캡쳐 이미지 로드 실패'));
+        img.src = dataUrl;
+    });
+}
+// mode: 'self' 현재 탭 / 'popup' 이 화면이 연 새 창
+function grabByExtension(mode = 'self') {
+    return new Promise((resolve, reject) => {
+        const id = Date.now() + '-' + Math.random();
+        const timer = setTimeout(() => { window.removeEventListener('message', onMsg); reject(new Error('확장 프로그램 응답 없음')); }, 5000);
+        function onMsg(e) {
+            if (e.source !== window || !e.data || e.data.type !== 'TEXTCATCH_CAPTURE_RES' || e.data.id !== id) return;
+            clearTimeout(timer);
+            window.removeEventListener('message', onMsg);
+            if (e.data.error || !e.data.dataUrl) return reject(new Error(e.data.error || '캡쳐 실패'));
+            dataUrlToCanvas(e.data.dataUrl).then(resolve, reject);
+        }
+        window.addEventListener('message', onMsg);
+        window.postMessage({ type: 'TEXTCATCH_CAPTURE_REQ', id, mode }, window.location.origin);
+    });
+}
+
+async function grabScreen() {
+    if (hasCaptureExtension()) return grabByExtension();
+    const isNew = await ensureShare();
+    // 새로 공유했으면 확인 창이 사라질 때까지, 이어진 공유면 최신 화면이 반영될 때까지 잠깐 대기
+    await new Promise(r => setTimeout(r, isNew ? 400 : 150));
+    const video = share.video;
+    const c = document.createElement('canvas');
+    c.width = video.videoWidth;
+    c.height = video.videoHeight;
+    c.getContext('2d').drawImage(video, 0, 0);
+    return c;
+}
+
+document.getElementById('url-panel-capture').addEventListener('click', async () => {
+    if (!hasCaptureExtension() && !(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia)) {
+        // http 접속은 화면 공유가 막혀 있으므로 확장 프로그램 설치 안내
+        if (confirm('화면캡쳐 확장 프로그램이 설치되어 있지 않습니다.\n(PC 크롬·엣지 전용, http 접속에서도 동작)\n\n설치 파일(zip)을 내려받을까요?\n압축 해제 후 안의 README.txt 순서대로 설치하세요.')) {
+            location.href = '/textcatch/capture_extension.zip';
+        }
+        return;
+    }
+    const filename = capFilename(urlPanel.phone.textContent);   // 버튼을 누른 시각 기준
+    let canvas;
+    try {
+        canvas = await grabScreen();
+    } catch (e) {
+        if (e.name !== 'NotAllowedError') alert('화면캡쳐 실패: ' + e.message);
+        return;   // 사용자가 공유를 취소한 경우는 조용히 종료
+    }
+    // 현재 탭을 공유했다면 캡쳐 크기 ≒ 화면 크기 × 배율 → 패널 위치를 그 배율로 환산
+    const scale = canvas.width / window.innerWidth;
+    const r = (urlPanel.imgBox.hidden ? urlPanel.frame : urlPanel.imgBox).getBoundingClientRect();   // 지금 보이는 본문 영역
+    const panelRect = { x: r.left * scale, y: r.top * scale, w: r.width * scale, h: r.height * scale };
+    // 현재 탭을 공유한 경우(가로세로 비율이 화면과 같음)에만 패널 영역을 자동 선택
+    const sameTab = Math.abs(canvas.height / scale - window.innerHeight) < 40;
+    openCapture(canvas, filename, panelRect, sameTab);
+});
+
+// 캡쳐 이미지로 영역 선택 화면 열기 (autoSelect 면 panelRect 를 미리 선택)
+function openCapture(canvas, filename, panelRect, autoSelect) {
+    capture.panelRect = panelRect;
+    capture.canvas = canvas;
+    capture.filename = filename;
+    capture.rect = null;
+    capture.sel.hidden = true;
+    capture.btnSel.disabled = true;
+    document.getElementById('cap-filename').textContent = filename;
+    capture.img.onload = () => { if (autoSelect) setSelection(capture.panelRect); };
+    capture.img.src = canvas.toDataURL('image/png');
+    capture.overlay.hidden = false;
+}
+
+// 새 창 캡쳐: 새 창 전체가 대상이므로 전체를 자동 선택
+function openPopupCapture(canvas) {
+    const filename = capFilename(popupState.phone || urlPanel.phone.textContent);
+    openCapture(canvas, filename, { x: 0, y: 0, w: canvas.width, h: canvas.height }, true);
+}
+// ① 새 창에서 단축키(Alt+Shift+S) → 확장 프로그램이 찍어서 이 화면으로 보내줌
+window.addEventListener('message', (e) => {
+    if (e.source !== window || !e.data || e.data.type !== 'TEXTCATCH_POPUP_CAPTURE') return;
+    if (e.data.error) { alert('새 창 캡쳐 실패: ' + e.data.error); return; }
+    dataUrlToCanvas(e.data.dataUrl).then(openPopupCapture, err => alert('새 창 캡쳐 실패: ' + err.message));
+});
+// ② 이 화면의 [📷 새 창 캡쳐] 버튼 (새 창이 이 화면에 완전히 가려져 있으면 예전 화면이 찍힐 수 있음)
+document.getElementById('popup-bar-capture').addEventListener('click', async () => {
+    try {
+        openPopupCapture(await grabByExtension('popup'));
+    } catch (err) {
+        alert('새 창 캡쳐 실패: ' + err.message);
+    }
+});
+
+// 캡쳐 원본 기준 영역을 선택 상태로 표시 (표시 크기로 환산해서 박스 그림)
+function setSelection(rect) {
+    const k = capture.img.getBoundingClientRect().width / capture.canvas.width;
+    Object.assign(capture.sel.style, {
+        left: rect.x * k + 'px', top: rect.y * k + 'px',
+        width: rect.w * k + 'px', height: rect.h * k + 'px',
+    });
+    capture.sel.hidden = false;
+    capture.rect = rect;
+    capture.btnSel.disabled = false;
+    capture.btnSel.focus();   // 바로 Enter 로 저장 가능
+}
+
+function saveCapture(rect) {
+    const src = capture.canvas;
+    if (!src || capture.saving) return;   // 저장 처리 중 Enter/클릭 연타로 두 번 저장되지 않게
+    const x = Math.max(0, Math.round(rect.x)), y = Math.max(0, Math.round(rect.y));
+    const w = Math.min(src.width - x, Math.round(rect.w)), h = Math.min(src.height - y, Math.round(rect.h));
+    if (w < 2 || h < 2) return;
+    const out = document.createElement('canvas');
+    out.width = w;
+    out.height = h;
+    out.getContext('2d').drawImage(src, x, y, w, h, 0, 0, w, h);
+    capture.saving = true;
+    out.toBlob(blob => {
+        capture.saving = false;
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = capture.filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        showToast(`${capture.filename} 저장됨`);
+        closeCapture();
+    }, 'image/png');
+}
+function closeCapture() {
+    capture.overlay.hidden = true;
+    capture.img.removeAttribute('src');
+    capture.canvas = null;
+}
+
+// 드래그로 영역 선택 (마우스/터치 공통 pointer 이벤트)
+(function () {
+    let start = null;
+    const toImg = e => {   // 화면 좌표 → 표시된 이미지 내부 좌표(px)
+        const b = capture.img.getBoundingClientRect();
+        return {
+            x: Math.min(Math.max(e.clientX - b.left, 0), b.width),
+            y: Math.min(Math.max(e.clientY - b.top, 0), b.height),
+            b,
+        };
+    };
+    capture.wrap.addEventListener('pointerdown', e => {
+        start = toImg(e);
+        capture.wrap.setPointerCapture(e.pointerId);   // 클릭만 하면 기존 선택 유지, 드래그해야 새로 선택
+    });
+    capture.wrap.addEventListener('pointermove', e => {
+        if (!start) return;
+        const p = toImg(e);
+        const x = Math.min(start.x, p.x), y = Math.min(start.y, p.y);
+        const w = Math.abs(p.x - start.x), h = Math.abs(p.y - start.y);
+        if (w < 3 || h < 3) return;   // 살짝 움직인 정도는 무시 (기존 선택 유지)
+        Object.assign(capture.sel.style, { left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px' });
+        capture.sel.hidden = false;
+        // 표시 크기 → 캡쳐 원본 크기로 환산
+        const k = capture.canvas.width / p.b.width;
+        capture.rect = { x: x * k, y: y * k, w: w * k, h: h * k };
+        capture.btnSel.disabled = false;
+    });
+    const end = () => {
+        start = null;
+        if (capture.rect) capture.btnSel.focus();   // 드래그 후에도 Enter/Space 로 바로 저장
+    };
+    capture.wrap.addEventListener('pointerup', end);
+    capture.wrap.addEventListener('pointercancel', end);
+})();
+
+capture.btnSel.addEventListener('click', () => capture.rect && saveCapture(capture.rect));
+document.getElementById('cap-save-panel').addEventListener('click', () => saveCapture(capture.panelRect));
+document.getElementById('cap-save-all').addEventListener('click', () =>
+    saveCapture({ x: 0, y: 0, w: capture.canvas.width, h: capture.canvas.height }));
+document.getElementById('cap-cancel').addEventListener('click', closeCapture);
+document.addEventListener('keydown', e => {
+    // 캡쳐 선택 중 Enter = 선택 영역 저장 (드래그하면 버튼 포커스가 풀리므로 포커스와 상관없이 처리)
+    if (e.key === 'Enter' && !capture.overlay.hidden) {
+        e.preventDefault();   // 포커스된 버튼의 기본 Enter 클릭과 중복 저장 방지
+        if (e.repeat || e.isComposing) return;
+        const f = document.activeElement;
+        if (f && f !== capture.btnSel && f.tagName === 'BUTTON' && capture.overlay.contains(f)) {
+            f.click();   // Tab 으로 다른 버튼(패널/전체/취소)을 고른 경우 그 버튼 실행
+        } else if (capture.rect) {
+            saveCapture(capture.rect);
+        } else {
+            showToast('먼저 드래그로 영역을 선택해 주세요');
+        }
+        return;
+    }
+    if (e.key !== 'Escape') return;
+    if (!document.getElementById('cap-overlay').hidden) { closeCapture(); return; }   // 캡쳐 선택 중이면 그것만 닫기
+    if (!urlPanel.el.hidden) urlPanel.close();
+});
+
+(function () {
+    const rows = Array.from(document.querySelectorAll('.js-check-row'));
+    const allBoxes = Array.from(document.querySelectorAll('.js-check-all'));
+    const btnDelete = document.getElementById('btn-delete');
+    const btnConfirm = document.getElementById('btn-confirm');
+    const form = document.getElementById('delete-form');
+
+    function refresh() {
+        const checked = rows.filter(cb => cb.checked).length;
+        rows.forEach(cb => cb.closest('tr').classList.toggle('is-selected', cb.checked));
+        allBoxes.forEach(cb => {
+            cb.checked = rows.length > 0 && checked === rows.length;
+            cb.indeterminate = checked > 0 && checked < rows.length;
+        });
+        btnDelete.disabled = checked === 0;
+        btnDelete.textContent = checked ? `🗑 선택 삭제 (${checked})` : '🗑 선택 삭제';
+        btnConfirm.disabled = checked === 0;
+        btnConfirm.textContent = checked ? `✔ 선택 확인 (${checked})` : '✔ 선택 확인';
+    }
+
+    allBoxes.forEach(cb => cb.addEventListener('change', () => {
+        rows.forEach(r => { r.checked = cb.checked; });
+        refresh();
+    }));
+    rows.forEach(cb => cb.addEventListener('change', refresh));
+
+    form.addEventListener('submit', (e) => {
+        const checked = rows.filter(cb => cb.checked).length;
+        const action = (e.submitter === btnConfirm) ? '확인(A) 처리' : '삭제';
+        if (!checked || !confirm(`선택한 ${checked}건을 ${action}하시겠습니까?`)) {
+            e.preventDefault();
+        }
+    });
+
+    refresh();
+})();
+</script>
+{% endblock %}

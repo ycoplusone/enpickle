@@ -1,0 +1,171 @@
+{% extends 'base.html' %}
+{% block content %}
+<style>
+	tr.chk-fail td { color: #dc3545 !important; font-weight: 600; }
+	tr.chk-fail td a { color: #dc3545 !important; }
+	tr.sum-row td { font-weight: 600; background-color: #f1f3f5; }
+	tr td.merged { vertical-align: middle; color: inherit !important; font-weight: normal; border-left: 1px solid #dee2e6; border-right: 1px solid #dee2e6; }
+	tbody tr td.val-T { color: #0d6efd !important; }
+	tbody tr td.val-F { color: #dc3545 !important; }
+	tbody tr td.merged.dev-warn { color: #fd7e14 !important; font-weight: 600; }
+	a.pk-receiver { background-color: #fff3a0; }
+	.js-notes { min-width: 160px; }
+	.js-notes.is-saved { border-color: #198754; background-color: #e8f5ee; }
+	.js-notes.is-error { border-color: #dc3545; background-color: #fbeaec; }
+</style>
+<div class="container py-4">
+	<div class="row mb-3">
+		<div class="col-12">
+			<h2>대시보드</h2>
+		</div>
+	</div>
+
+	<div class="row mb-1">
+		<div class="col-md-6 col-lg-4 mb-3">
+			<div class="card h-100">
+				<div class="card-body">
+					<h5 class="card-title">잔여 수집 데이터 건수 (최근 10일)</h5>
+					<p class="card-text" style="font-size:32px; font-weight:600;">{{ remaining_count }}</p>
+				</div>
+			</div>
+		</div>
+		<div class="col-md-6 col-lg-4 mb-3">
+			<div class="card h-100">
+				<div class="card-body">
+					<h5 class="card-title">최근 7일 작업 일별 건수!!!</h5>
+					{% if week_counts %}
+					<div style="overflow:auto">
+						<table class="table table-sm">
+							<thead>
+								<tr>
+									<th>일자</th>
+									<th>건수</th>
+								</tr>
+							</thead>
+							<tbody>
+								{% for r in week_counts %}
+								<tr>
+									<td>{{ r.d }}</td>
+									<td>{{ r.cnt }}</td>
+								</tr>
+								{% endfor %}
+							</tbody>
+						</table>
+					</div>
+					{% else %}
+						<p>데이터가 없습니다.</p>
+					{% endif %}
+				</div>
+			</div>
+		</div>
+		<div class="col-md-6 col-lg-4 mb-3">
+			<div class="card h-100">
+				<div class="card-body">
+					<h5 class="card-title">최근 8일 문자 수신 건수</h5>
+					{% if text_counts %}
+					<div style="overflow:auto">
+						<table class="table table-sm">
+							<thead>
+								<tr>
+									<th>일자</th>
+									<th>수신번호 수</th>
+									<th>문자 건수</th>
+								</tr>
+							</thead>
+							<tbody>
+								{% for r in text_counts %}
+								{% set d = r.base_dt | string %}
+								<tr>
+									<td>{{ d[4:6] ~ '/' ~ d[6:8] if d|length == 8 else d }}</td>
+									<td>{{ r.rec_cnt }}</td>
+									<td>{{ r.cnt }}</td>
+								</tr>
+								{% endfor %}
+							</tbody>
+						</table>
+					</div>
+					{% else %}
+						<p>데이터가 없습니다.</p>
+					{% endif %}
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="row mb-1">
+		<div class="col-12 mb-3">
+			<div class="card h-100">
+				<div class="card-body">
+					<div class="d-flex justify-content-between align-items-center mb-2">
+						<h5 class="card-title mb-0">SMS/MMS 수신 체크</h5>
+						<div class="d-flex align-items-center gap-2">
+							<small class="text-muted" id="received-info-time"></small>
+							<button type="button" class="btn btn-sm btn-outline-secondary" id="btn-received-refresh">⟳ 새로 고침</button>
+						</div>
+					</div>
+					<div id="received-info">
+						{% include 'home/_received_info.html' %}
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<script>
+// SMS/MMS 수신 체크 영역만 다시 조회
+(function () {
+	const box = document.getElementById('received-info');
+	const btn = document.getElementById('btn-received-refresh');
+	const time = document.getElementById('received-info-time');
+
+	btn.addEventListener('click', async () => {
+		btn.disabled = true;
+		btn.textContent = '⟳ 조회 중...';
+		try {
+			const res = await fetch('/received-info', { cache: 'no-store' });
+			if (!res.ok) throw new Error(res.status);
+			box.innerHTML = await res.text();
+			time.textContent = new Date().toLocaleTimeString('ko-KR', { hour12: false }) + ' 갱신';
+		} catch (e) {
+			alert('새로 고침에 실패했습니다. (' + e.message + ')');
+		} finally {
+			btn.disabled = false;
+			btn.textContent = '⟳ 새로 고침';
+		}
+	});
+
+	// 비고: 입력 후 포커스가 빠지거나 Enter 시 저장 (새로 고침으로 표가 바뀌어도 동작하도록 위임)
+	box.addEventListener('keydown', (e) => {
+		if (e.target.classList.contains('js-notes') && e.key === 'Enter') e.target.blur();
+	});
+	box.addEventListener('change', async (e) => {
+		const input = e.target;
+		if (!input.classList.contains('js-notes')) return;
+		const notes = input.value.trim();
+		if (notes === input.dataset.saved) return;
+
+		input.classList.remove('is-saved', 'is-error');
+		try {
+			const res = await fetch('/received-info/notes', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					receiver: input.dataset.receiver,
+					notes: notes,
+				}),
+			});
+			const data = await res.json().catch(() => ({}));
+			if (!res.ok) throw new Error(data.message || res.status);
+			input.value = notes;
+			input.dataset.saved = notes;
+			input.classList.add('is-saved');
+			setTimeout(() => input.classList.remove('is-saved'), 1500);
+		} catch (err) {
+			input.classList.add('is-error');
+			alert('비고 저장에 실패했습니다. (' + err.message + ')');
+		}
+	});
+})();
+</script>
+{% endblock %}

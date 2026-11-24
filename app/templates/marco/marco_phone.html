@@ -1,0 +1,174 @@
+{% extends "base_bare.html" %}
+{# 독립 화면: 상단 메뉴 없음, 메뉴에도 등록하지 않음 (/marco_phone 직접 접속) #}
+
+{% block content %}
+<style>
+    .container { max-width: 1600px; }
+    .page-title { color: #8e44ad; }
+    .page-desc { font-size: 13px; color: #888; margin-bottom: 16px; }
+    .search-form {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: flex-end;
+        padding: 12px 15px;
+        margin-bottom: 16px;
+        background: #fafafa;
+        border: 1px solid #eee;
+        border-radius: 6px;
+    }
+    .search-form .field { display: flex; flex-direction: column; gap: 4px; }
+    .search-form label { font-size: 12px; color: #888; }
+    .search-form .f-phone input { width: 200px; font-family: monospace; }
+    .btn-search {
+        padding: 10px 18px;
+        border: none;
+        border-radius: 4px;
+        background: #8e44ad;
+        color: #fff;
+        font-weight: bold;
+        cursor: pointer;
+    }
+    .btn-search:hover { background: #732d91; }
+
+    .marco-table { table-layout: fixed; font-size: 14px; }
+    .marco-table td.job-nm { text-align: left; white-space: pre-line; }
+    .marco-table td.url { text-align: left; }
+    .marco-table td.url a { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .marco-table .dt { font-size: 13px; color: #555; }
+    .marco-table .sort { font-weight: bold; }
+    .marco-table td.etc { text-align: left; font-size: 13px; color: #555; }
+    .marco-table td.prize { text-align: left; }
+    .due-over { color: #aaa; text-decoration: line-through; }   /* 마감 지남 */
+    .due-today { color: #e74c3c; font-weight: bold; }            /* 오늘 마감 */
+    .flag-ai { color: #8e44ad; font-weight: bold; }
+    .flag-pickle { color: #d35400; font-weight: bold; }
+    .flag-human { color: #27ae60; font-weight: bold; }
+    .no-data { padding: 40px; color: #999; }
+    /* 처리구분(완료/미완료 라디오) · 비고 입력 칸 */
+    .done-status { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; width: fit-content; margin: 0 auto; font-size: 13px; }   /* 라디오 세로 배치 */
+    .marco-table td.status-cell { padding-left: 2px; padding-right: 2px; }   /* 처리구분 칸 좌우 여백 축소 */
+    .done-status label { display: inline-flex; align-items: center; gap: 3px; cursor: pointer; margin: 0; }
+    .done-etc { width: 100%; box-sizing: border-box; font-size: 13px; padding: 3px 6px; }
+
+    @media (max-width: 700px) {
+        .search-form .field { flex: 1 1 calc(50% - 5px); min-width: 0; }
+        .search-form .field input, .search-form .field select { width: 100%; }
+        .search-form .f-phone { flex-basis: 100%; }
+        .btn-search { flex: 1 1 100%; }
+        .marco-table { table-layout: auto; }
+        .marco-table td.url a { white-space: normal; }
+    }
+</style>
+
+<div class="container py-4">
+    <h2 class="page-title">📞 전화번호별 작업 조회</h2>
+    <p class="page-desc">pickle 매크로 작업(flag = pickle) 중 입력한 전화번호가 아직 하지 않은 작업 목록입니다.</p>
+
+    <form class="search-form" method="GET" action="{{ url_for('marco_phone_bp.marco_phone') }}">
+        <div class="field f-phone">
+            <label for="phone">전화번호 (필수)</label>
+            <input type="text" id="phone" name="phone" value="{{ phone }}" placeholder="01012345678" inputmode="tel" required autofocus>
+        </div>
+        <button type="submit" class="btn-search">조회</button>
+    </form>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, msg in messages %}
+        <div class="message-box {{ 'is-error' if category == 'error' else '' }}">{{ msg }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    {% if searched %}
+    <p class="result-count">
+        총 <strong>{{ total }}</strong>건{% if total > rows|length %} (최근 {{ rows|length }}건만 표시){% endif %}
+    </p>
+
+    <div class="table-scroll">
+        <table class="marco-table table-cards">
+            <colgroup>
+                <col style="width: 60px;">   {# No #}
+                <col>                        {# 작업명 #}
+                <col style="width: 100px;">  {# 이벤트 종류 #}
+                <col style="width: 130px;">  {# 상품 #}
+                <col style="width: 60px;">   {# 갯수 #}
+                <col style="width: 80px;">   {# 마감일자 #}
+                <col style="width: 80px;">   {# 발표일자 #}
+                <col style="width: 16%;">    {# URL #}
+                <col style="width: 98px;">   {# 특이사항 #}
+                <col style="width: 80px;">   {# 등록일시 #}
+                <col style="width: 72px;">   {# 처리구분 #}
+                <col style="width: 180px;">  {# 비고 #}
+                <col style="width: 100px;">  {# 처리 #}
+            </colgroup>
+            <thead>
+                <tr>
+                    <th>No</th>
+                    <th>작업명</th>
+                    <th>이벤트 종류</th>
+                    <th>상품</th>
+                    <th>갯수</th>
+                    <th>마감일자</th>
+                    <th>발표일자</th>
+                    <th>URL</th>
+                    <th>특이사항</th>
+                    <th>등록일시</th>
+                    <th>처리구분</th>
+                    <th>비고</th>
+                    <th>처리</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td data-label="No">{{ row.seq }}</td>
+                    <td class="job-nm cell-block" data-label="작업명">{{ row.job_nm or '' }}</td>
+                    <td data-label="이벤트 종류">{{ row.event_nm or '-' }}</td>
+                    <td class="prize" data-label="상품">{{ row.prize_nm or '-' }}</td>
+                    <td data-label="갯수">{{ row.prize_cnt or '-' }}</td>
+                    <td data-label="마감일자" class="dt">
+                        {% set due = (row.due_dt or '')[:8] %}
+                        {% if due|length == 8 %}
+                            <span class="{{ 'due-over' if due < today else ('due-today' if due == today else '') }}"
+                                  title="{{ '마감 지남' if due < today else ('오늘 마감' if due == today else '') }}">{{ due[2:4] }}.{{ due[4:6] }}.{{ due[6:8] }}</span>
+                        {% else %}{{ row.due_dt or '-' }}{% endif %}
+                    </td>
+                    <td data-label="발표일자" class="dt">
+                        {% set ann = row.ann_dt or '' %}
+                        {% if ann|length == 8 %}{{ ann[2:4] }}.{{ ann[4:6] }}.{{ ann[6:8] }}{% else %}{{ ann or '-' }}{% endif %}
+                    </td>
+                    <td class="url" data-label="URL">
+                        {% if row.url %}<a href="{{ row.url }}" target="_blank" rel="noreferrer" title="{{ row.url }}">{{ row.url }}</a>{% else %}-{% endif %}
+                    </td>
+                    <td class="etc cell-block" data-label="특이사항">{{ row.etc or '' }}</td>
+                    <td data-label="등록일시" class="dt">{% if row.created_at %}{{ row.created_at.strftime('%y.%m.%d') }}<br>{{ row.created_at.strftime('%H:%M') }}{% else %}-{% endif %}</td>
+                    {# 처리구분·비고는 별도 칸, form 속성으로 같은 행의 처리완료 폼에 함께 전송 #}
+                    <td data-label="처리구분" class="status-cell">
+                        <div class="done-status">
+                            <label><input type="radio" name="status" value="y" form="done-{{ row.seq }}" checked> 완료</label>
+                            <label><input type="radio" name="status" value="n" form="done-{{ row.seq }}"> 미완료</label>
+                        </div>
+                    </td>
+                    <td data-label="비고">
+                        <input type="text" name="etc" class="done-etc" form="done-{{ row.seq }}" maxlength="256" placeholder="비고">
+                    </td>
+                    <td data-label="처리">
+                        <form id="done-{{ row.seq }}" method="POST" action="{{ url_for('marco_phone_bp.marco_phone_done') }}"
+                              onsubmit="return confirm('{{ row.seq }}번 작업을 처리완료할까요?');">
+                            <input type="hidden" name="seq" value="{{ row.seq }}">
+                            <input type="hidden" name="phone" value="{{ phone }}">
+                            <button type="submit" class="btn-done">처리<br>완료</button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="13" class="no-data">남은 작업이 없습니다.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="no-data">전화번호를 입력하고 조회하세요.</p>
+    {% endif %}
+</div>
+{% endblock %}

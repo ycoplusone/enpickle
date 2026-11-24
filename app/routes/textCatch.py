@@ -1,0 +1,756 @@
+import os
+import base64
+import mimetypes
+import hashlib
+import uuid
+from flask import Blueprint, json, render_template,Flask, request, jsonify, send_from_directory, send_file, abort, flash, redirect, url_for
+from app.logics.home import get_remaining_collection_count, get_last7_job_counts
+from werkzeug.utils import secure_filename
+from datetime import datetime, timedelta
+
+from app.logics.textCatch import setTextCatch, getTextCatchList, deleteTextCatch, confirmTextCatch, updateTextCatchGiftYn, updateTextCatchUseYn, makeTextCatchExcel, makeTextCatchImageZip , setAppLog
+from app.logics.textCatch import getGiftWordList, addGiftWord, updateGiftWord, deleteGiftWord
+from app.logics.textCatch import getPhoneList, getPhoneCodeList, addPhone, updatePhone, deletePhone
+
+# 'main'이라는 이름의 블루프린트 생성
+main_bp = Blueprint('textCatch', __name__)
+
+# 업로드 폴더는 git 저장소 바깥(프로젝트 루트의 상위 폴더)에 둡니다.
+# CI/CD가 flask 폴더를 삭제 후 git에서 다시 받아도 수신 이미지가 유지됩니다.
+# .env의 UPLOAD_FOLDER로 절대경로 지정 시 그 값을 우선 사용합니다. (예: /data/received_images)
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))  # /home/dlive/flask
+UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER') or os.path.join(os.path.dirname(PROJECT_ROOT), 'received_images')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# APK 배포 폴더 (업로드 폴더와 같은 이유로 git 저장소 바깥에 둡니다)
+# APK와 version.json은 항상 같은 파일명으로 덮어쓰기 관리합니다.
+APK_FOLDER = os.environ.get('APK_FOLDER') or os.path.join(os.path.dirname(PROJECT_ROOT), 'apk_releases')
+APK_FILENAME = 'textcatch.apk'
+VERSION_FILENAME = 'version.json'
+os.makedirs(APK_FOLDER, exist_ok=True)
+
+@main_bp.route('/api/sms-receiver', methods=['POST'])
+def makeImageFilename(received_time: str, sender: str, msg_id: str, ext: str) -> str:
+    """
+    MMS 이미지 저장 파일명: {수신시각 yyyyMMddHHmmss}_{발신번호}_{고유값}{확장자}
+      예) 20261119143005_01012345678_a1b2c3d4.jpg
+    - 고유값: 앱이 보낸 msg_id 가 있으면 그 값 → 재전송(attempt 2~)돼도 같은 파일명이라 중복 파일이 생기지 않음
+              msg_id 가 없으면 무작위 8자리(uuid4) → 같은 초·같은 발신번호라도 덮어쓰지 않음
+    - 수신시각은 서버 시각이 아니라 앱이 보낸 timestamp 기준 (재전송 시에도 동일)
+    - secure_filename 으로 경로 문자/특수문자 제거
+    """
+    stamp = received_time.replace('-', '').replace(':', '').replace(' ', '')   # 'YYYY-MM-DD HH:MM:SS' → 'YYYYMMDDHHMMSS'
+    sender_part = secure_filename(str(sender or ''))[:20] or 'unknown'
+    uniq = secure_filename(str(msg_id or ''))[:40] or uuid.uuid4().hex[:8]
+    return secure_filename(f"{stamp}_{sender_part}_{uniq}{ext}")
+
+
+@main_bp.route('/api/textcatch', methods=['POST'])
+def TextCatch():
+    # REM SMS 전송 예시
+    # curl -X POST http://localhost:5000/api/textcatch ^
+    # -H "Content-Type: application/json" ^
+    # -d "{\"type\":\"SMS\",\"sender\":\"01012345678\",\"receiver\":\"01099999999\",\"body\":\"Hello World\",\"timestamp\":1695123456789}"
+
+    # REM MMS 전송 예시 (images 배열에 Base64 인코딩된 이미지 포함)
+    # curl -X POST http://localhost:5000/api/textcatch ^
+    # -H "Content-Type: application/json" ^
+    # -d "{\"type\":\"MMS\",\"sender\":\"01012345678\",\"receiver\":\"01099999999\",\"body\":\"Check this image\",\"images\":[{\"mime_type\":\"image/jpeg\",\"data\":\"iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAIAAAACUFjqAAAAEklEQVR4nGP4z8CAB+GTG8HSALfKY52fTcuYAAAAAElFTkSuQmCC\"}],\"timestamp\":1695123456789}"
+
+    # REM HEARTBEAT 전송 예시 (메시지 내용은 비워도 됨)
+    # curl -i -X POST "http://localhost:5000/api/textcatch" ^
+    # -H "Content-Type: application/json; charset=utf-8" ^
+    # -d "{\"type\":\"HEARTBEAT\",\"sender\":\"\",\"receiver\":\"01099999999\",\"body\":\"TextCatch test\",\"timestamp\":1793080000000,\"device_id\":\"test-device-0001\",\"msg_id\":\"hb-test-0001\",\"received_at\":1793080000000,\"sent_at\":1793080000120,\"attempt\":1,\"path\":\"worker\",\"status\":{\"retry_count\":0,\"inflight_count\":0,\"hold_count\":2,\"hold_oldest_received_at\":1793000000000,\"hold_reasons\":{\"404\":2},\"hold_dropped\":0,\"corrupt_count\":0,\"mms_unsent\":0,\"mms_pending_download\":1,\"mms_pending_oldest\":1793070000000}}"    
+
+    # 1. JSON 파싱
+    payload = request.get_json(silent=True)
+    if not payload:
+        print(f"[textcatch] JSON 파싱 실패, raw body: {request.get_data(as_text=True)[:500]}")
+        return jsonify({"status": "error", "message": "Invalid JSON body"}), 400
+
+    # 입력받은 모든 파라미터/값 출력 (이미지는 제외)
+    print("[textcatch] ===== 수신 파라미터 =====")
+    for key, value in payload.items():
+        if key == 'images':
+            continue
+        print(f"  {key} = {value!r}")
+    print("[textcatch] ========================")
+
+    # 2. 메타데이터 수신
+    msg_type        = payload.get('type', 'SMS')        # SMS / MMS
+    sender          = payload.get('sender','1234567890')             # 발신자
+    receiver        = payload.get('receiver')           # 수신자
+    message_body    = payload.get('body', '')           # 메시지 내용
+    device_id       = payload.get('device_id', '')           # 폰의 고유 ID (선택)
+    timestamp       = payload.get('timestamp')          # 수신 시간 (epoch milliseconds)
+    sent_at         = payload.get('sent_at' ) #발   신 시간 (없으면 현재 시간 사용)
+    attempt         = payload.get('attempt'        , '1')   #시도횧수 (없으면 1회)
+    path            = payload.get('path'           , '')   #메세지고유값(없으면 빈값) 중복값 발생은 이후 체크한다.
+    msg_id          = payload.get('msg_id'         , '')   #메세지ID(없으면 빈값) 중복값 발생은 이후 체크한다.   
+    
+    # status는 JSON 객체이므로 문자열로 변환하여 DB에 저장 (없으면 빈 JSON)
+    # 기본값을 문자열 '{}'로 두면 status 없는 SMS/MMS에서 .get() 호출 시 AttributeError 발생 → dict로 보정
+    status          = payload.get('status') or {}
+    if not isinstance(status, dict):
+        status = {}
+    # HEARTBEAT 수신 시, received_info 테이블에 heartbeat_dt 갱신
+    hold_oldest_received_at = status.get('hold_oldest_received_at')
+    mms_pending_oldest      = status.get('mms_pending_oldest')
+    if hold_oldest_received_at:
+        try:
+            hold_oldest_received_time = datetime.fromtimestamp(int(hold_oldest_received_at) / 1000).strftime('%Y-%m-%d %H:%M:%S')
+        except (TypeError, ValueError):
+            hold_oldest_received_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    else:
+        hold_oldest_received_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    if mms_pending_oldest:
+        try:
+            mms_pending_oldest_time = datetime.fromtimestamp(int(mms_pending_oldest) / 1000).strftime('%Y-%m-%d %H:%M:%S')
+        except (TypeError, ValueError):
+            mms_pending_oldest_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    else:
+        mms_pending_oldest_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')    
+
+    
+    
+    retry_count         =  status.get('retry_count', 0)
+    inflight_count      = status.get('inflight_count', 0)
+    hold_count          = status.get('hold_count', 0)
+    hold_oldest_received_time = hold_oldest_received_time
+    hold_reasons        = status.get('hold_reasons', {})
+    hold_dropped        = status.get('hold_dropped', 0)
+    corrupt_count       = status.get('corrupt_count', 0)
+    mms_unsent          = status.get('mms_unsent', 0)
+    mms_pending_download    = status.get('mms_pending_download', 0)
+    mms_pending_oldest_time = mms_pending_oldest_time
+    
+
+    
+
+    # 3. timestamp(밀리초) -> datetime 문자열 변환 (없으면 현재 시간 사용)
+    if timestamp:
+        try:
+            received_time = datetime.fromtimestamp(int(timestamp) / 1000).strftime('%Y-%m-%d %H:%M:%S')
+        except (TypeError, ValueError):
+            received_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    else:
+        received_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    if sent_at:
+        try:
+            send_time = datetime.fromtimestamp(int(sent_at) / 1000).strftime('%Y-%m-%d %H:%M:%S')
+        except (TypeError, ValueError):
+            send_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    else:
+        send_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    # 4. Base64 이미지 -> 파일 저장 (MMS의 경우, 이미지는 단일 파일)
+    images = payload.get('images') or []
+    image = images[0] if images else None
+
+    image_filename = None
+    b64_data = (image or {}).get('data')
+    if b64_data:
+        mime_type = image.get('mime_type', 'image/jpeg')
+        ext = mimetypes.guess_extension(mime_type) or '.jpg'
+        if ext == '.jpe':
+            ext = '.jpg'
+
+        # data URI 형식(data:image/jpeg;base64,....)으로 들어오는 경우 헤더 제거
+        if b64_data.strip().startswith('data:') and ',' in b64_data:
+            b64_data = b64_data.split(',', 1)[1]
+
+        try:
+            image_bytes = base64.b64decode(b64_data)
+
+            image_filename = makeImageFilename(received_time, sender, msg_id, ext)
+            image_path = os.path.join(UPLOAD_FOLDER, image_filename)
+            with open(image_path, 'wb') as f:
+                f.write(image_bytes)
+        except Exception as e:
+            print(f"이미지 디코딩/저장 실패: {e}")
+            image_filename = None
+
+    # 5. 데이터 확인 (DB 적재는 추후 처리)
+    #print(f"[{received_time}] ({msg_type}) From: {sender} -> To: {receiver}")
+    #print(f"device_id: {device_id}")
+    #print(f"내용: {message_body}")
+    #if image_filename:
+    #    print(f"첨부 이미지: {image_filename}")
+
+    # TODO: DB 입력 처리
+    # image_filename이 None이면 f-string INSERT에서 문자열 'None'으로 저장되므로 빈 문자열로 전달
+    setTextCatch(sender     , receiver     , message_body     , received_time     ,device_id      , send_time   , attempt    ,path    ,msg_id, image_filename or '' )
+    
+    if msg_type == 'HEARTBEAT' and status:
+        setAppLog(receiver , retry_count , inflight_count , hold_count , hold_oldest_received_time , hold_reasons , hold_dropped , corrupt_count , mms_unsent , mms_pending_download , mms_pending_oldest_time)
+
+    return jsonify({"status": "success", "message": "Data received successfully"}), 200
+
+
+@main_bp.route('/textcatch', methods=['GET'])
+def textCatchList():
+    """수신 메시지 목록 화면 (기본 조회 조건: base_dt = 당일 ~ 내일(D+1))"""
+    # 1. 검색 조건 수신 (없으면 기본값 당일 ~ 내일)
+    start_dt, end_dt, sender, receiver, keyword, msg_type, gift_yn, use_yn = _getSearchArgs()
+
+    # 2. 목록 조회
+    list_rows = getTextCatchList(start_dt, end_dt, sender, receiver, keyword, msg_type, gift_yn, use_yn)
+
+    # 2-1. 페이징 (page_size: '50' 기본 / 'all' 전체, page: 1부터)
+    #      총 건수·이미지 건수는 전체 기준으로 보여주고, 표에는 현재 페이지 건만 출력
+    page_size = 'all' if request.args.get('page_size') == 'all' else '50'
+    total_count = len(list_rows)
+    image_count = sum(1 for r in list_rows if r.get('image_filename'))
+    if page_size == 'all':
+        page, total_pages, page_rows = 1, 1, list_rows
+    else:
+        size = int(page_size)
+        total_pages = max(1, (total_count + size - 1) // size)
+        page = request.args.get('page', '1')
+        page = int(page) if page.isdigit() else 1
+        page = min(max(page, 1), total_pages)
+        page_rows = list_rows[(page - 1) * size: page * size]
+
+    # 페이지 번호는 현재 페이지 앞뒤 5개까지만 표시
+    page_start = max(1, page - 5)
+    page_end = min(total_pages, page + 5)
+
+    # 3. 화면 전달 (date input은 YYYY-MM-DD 형식이 필요하므로 변환값도 함께 전달)
+    return render_template(
+        'textcatch/textcatch_list.html',
+        list_rows=page_rows,
+        total_count=total_count,
+        image_count=image_count,
+        page_size=page_size,
+        page=page,
+        total_pages=total_pages,
+        page_start=page_start,
+        page_end=page_end,
+        start_dt=start_dt,
+        end_dt=end_dt,
+        start_dt_view=f"{start_dt[0:4]}-{start_dt[4:6]}-{start_dt[6:8]}",
+        end_dt_view=f"{end_dt[0:4]}-{end_dt[4:6]}-{end_dt[6:8]}",
+        sender=sender,
+        receiver=receiver,
+        keyword=keyword,
+        msg_type=msg_type,
+        gift_yn=gift_yn,
+        use_yn=use_yn,
+    )
+
+
+def _readCheckedIds():
+    """목록 화면에서 체크한 메시지 id 목록"""
+    return [int(v) for v in request.form.getlist('ids') if v.strip().isdigit()]
+
+
+def _redirectTextCatchList():
+    """일괄 처리 후 같은 조회 조건으로 목록 복귀"""
+    return redirect(url_for('textCatch.textCatchList',
+                            start_dt=request.form.get('start_dt', ''),
+                            end_dt=request.form.get('end_dt', ''),
+                            sender=request.form.get('sender', ''),
+                            receiver=request.form.get('receiver', ''),
+                            keyword=request.form.get('keyword', ''),
+                            msg_type=request.form.get('msg_type', ''),
+                            gift_yn=request.form.get('gift_yn', ''),
+                            use_yn=request.form.get('use_yn') or 'Y',
+                            page_size=request.form.get('page_size', ''),
+                            page=request.form.get('page', '')))
+
+
+@main_bp.route('/textcatch/delete', methods=['POST'])
+def textCatchDelete():
+    """선택한 수신 메시지 삭제 (use_yn -> 'N' 변경) 후 같은 조회 조건으로 목록 복귀"""
+    ids = _readCheckedIds()
+
+    if not ids:
+        flash('삭제할 메시지를 선택해 주세요.', 'error')
+    else:
+        deleted = deleteTextCatch(ids)
+        flash(f'{deleted}건을 삭제했습니다.', 'info')
+
+    return _redirectTextCatchList()
+
+
+@main_bp.route('/textcatch/confirm', methods=['POST'])
+def textCatchConfirm():
+    """선택한 수신 메시지 확인 처리 (use_yn -> 'A' 변경) 후 같은 조회 조건으로 목록 복귀"""
+    ids = _readCheckedIds()
+
+    if not ids:
+        flash('확인 처리할 메시지를 선택해 주세요.', 'error')
+    else:
+        updated = confirmTextCatch(ids)
+        flash(f'{updated}건을 확인 처리했습니다.', 'info')
+
+    return _redirectTextCatchList()
+
+
+@main_bp.route('/textcatch/gift_yn', methods=['POST'])
+def textCatchGiftYn():
+    """목록 행에서 대상(gift_yn) 변경 (화면 새로고침 없이 fetch 로 호출, JSON 응답)"""
+    payload = request.get_json(silent=True) or {}
+    msg_id = str(payload.get('id', '')).strip()
+    gift_yn = str(payload.get('gift_yn', '')).strip().upper()
+
+    if not msg_id.isdigit() or gift_yn not in ('A', 'N', 'Y'):
+        return jsonify({'ok': False, 'message': '잘못된 요청입니다.'}), 400
+    row = updateTextCatchGiftYn(int(msg_id), gift_yn)
+    if row is None:
+        return jsonify({'ok': False, 'message': '메시지를 찾을 수 없습니다.'}), 404
+    return jsonify({'ok': True, **row})
+
+
+@main_bp.route('/textcatch/use_yn', methods=['POST'])
+def textCatchUseYn():
+    """목록 행에서 상태(use_yn) 변경 (Y 사용 / N 삭제 / A 확인, fetch 로 호출, JSON 응답)"""
+    payload = request.get_json(silent=True) or {}
+    msg_id = str(payload.get('id', '')).strip()
+    use_yn = str(payload.get('use_yn', '')).strip().upper()
+
+    if not msg_id.isdigit() or use_yn not in ('A', 'N', 'Y'):
+        return jsonify({'ok': False, 'message': '잘못된 요청입니다.'}), 400
+    value = updateTextCatchUseYn(int(msg_id), use_yn)
+    if value is None:
+        return jsonify({'ok': False, 'message': '메시지를 찾을 수 없습니다.'}), 404
+    return jsonify({'ok': True, 'use_yn': value})
+
+
+@main_bp.route('/textcatch/image/<filename>')
+def textCatchImage(filename):
+    """업로드 폴더(저장소 바깥)에 저장된 수신 이미지를 화면에 보여주기 위한 서빙용 라우트"""
+    safe_name = secure_filename(filename)
+    if not safe_name:
+        abort(404)
+    return send_from_directory(UPLOAD_FOLDER, safe_name)
+
+
+def _getSearchArgs():
+    """목록/엑셀/이미지ZIP이 공통으로 쓰는 조회 조건 (기본 당일 ~ 내일(D+1))"""
+    today = datetime.now().strftime('%Y%m%d')
+    default_start = today
+    default_end = (datetime.now() + timedelta(days=1)).strftime('%Y%m%d')  # 종료일 기본값: 내일(D+1)
+
+    start_dt = (request.args.get('start_dt') or default_start).replace('-', '').strip()
+    end_dt = (request.args.get('end_dt') or default_end).replace('-', '').strip()
+    sender = (request.args.get('sender') or '').strip()
+    receiver = (request.args.get('receiver') or '').strip()
+    keyword = (request.args.get('keyword') or '').strip()
+    msg_type = (request.args.get('msg_type') or '').strip().upper()
+    if msg_type not in ('MMS', 'SMS'):
+        msg_type = ''
+    gift_yn = (request.args.get('gift_yn') or '').strip().upper()
+    if gift_yn not in ('A', 'N', 'Y'):
+        gift_yn = ''
+    # 상태: Y 사용 / N 삭제 / A 확인 중 하나 (전체 없음, 값이 없거나 잘못되면 'Y')
+    use_yn = (request.args.get('use_yn') or '').strip().upper()
+    if use_yn not in ('A', 'N', 'Y'):
+        use_yn = 'Y'
+
+    # 시작일이 종료일보다 크면 서로 교환
+    if start_dt > end_dt:
+        start_dt, end_dt = end_dt, start_dt
+
+    return start_dt, end_dt, sender, receiver, keyword, msg_type, gift_yn, use_yn
+
+
+@main_bp.route('/textcatch/excel', methods=['GET'])
+def textCatchExcel():
+    """현재 조회 조건의 목록을 엑셀(xlsx)로 다운로드 (이미지 제외)"""
+    start_dt, end_dt, sender, receiver, keyword, msg_type, gift_yn, use_yn = _getSearchArgs()
+
+    list_rows = getTextCatchList(start_dt, end_dt, sender, receiver, keyword, msg_type, gift_yn, use_yn)
+    excel_file = makeTextCatchExcel(list_rows)
+
+    # 파일명: 조회기간 + 다운로드 시각
+    download_name = f"수신메시지_{start_dt}_{end_dt}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
+
+    return send_file(
+        excel_file,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=download_name,
+    )
+
+
+@main_bp.route('/textcatch/images', methods=['GET'])
+def textCatchImageZip():
+    """현재 조회 조건에 포함된 첨부 이미지를 ZIP으로 한번에 다운로드"""
+    start_dt, end_dt, sender, receiver, keyword, msg_type, gift_yn, use_yn = _getSearchArgs()
+
+    list_rows = getTextCatchList(start_dt, end_dt, sender, receiver, keyword, msg_type, gift_yn, use_yn)
+    zip_file, file_count = makeTextCatchImageZip(list_rows, UPLOAD_FOLDER)
+
+    # 받을 이미지가 없으면 빈 ZIP을 주지 않고 목록으로 돌려보냄
+    if file_count == 0:
+        flash('해당 기간에 다운로드할 이미지가 없습니다.', 'info')
+        return redirect(url_for('textCatch.textCatchList',
+                                start_dt=start_dt, end_dt=end_dt,
+                                sender=sender, receiver=receiver, keyword=keyword,
+                                msg_type=msg_type, gift_yn=gift_yn, use_yn=use_yn))
+
+    download_name = f"수신이미지_{start_dt}_{end_dt}_{datetime.now().strftime('%Y%m%d%H%M%S')}.zip"
+
+    return send_file(
+        zip_file,
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name=download_name,
+    )
+
+
+def _readApkVersion():
+    """apk_releases/version.json 읽기 (없거나 깨졌으면 빈 dict)"""
+    version_path = os.path.join(APK_FOLDER, VERSION_FILENAME)
+    try:
+        with open(version_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except (FileNotFoundError, ValueError):
+        return {}
+
+
+@main_bp.route('/api/textcatch/apk', methods=['GET', 'POST'])
+def textCatchApk():
+    """APK 업로드 + version.json(versionCode, versionName) 관리 화면 (같은 파일명으로 덮어쓰기)"""
+    if request.method == 'POST':
+        version_code = (request.form.get('versionCode') or '').strip()
+        version_name = (request.form.get('versionName') or '').strip()
+        apk_file = request.files.get('apk_file')
+
+        # 1. 입력값 검증
+        if not version_code.isdigit():
+            flash('versionCode는 숫자로 입력해 주세요.', 'error')
+            return redirect(url_for('textCatch.textCatchApk'))
+        if not version_name:
+            flash('versionName을 입력해 주세요.', 'error')
+            return redirect(url_for('textCatch.textCatchApk'))
+
+        apk_path = os.path.join(APK_FOLDER, APK_FILENAME)
+        has_upload = apk_file is not None and apk_file.filename != ''
+        if has_upload and not apk_file.filename.lower().endswith('.apk'):
+            flash('.apk 파일만 업로드할 수 있습니다.', 'error')
+            return redirect(url_for('textCatch.textCatchApk'))
+        if not has_upload and not os.path.exists(apk_path):
+            flash('등록된 APK가 없습니다. APK 파일을 선택해 주세요.', 'error')
+            return redirect(url_for('textCatch.textCatchApk'))
+
+        # 2. APK 덮어쓰기 (임시파일에 저장 후 교체 → 저장 도중 다운로드해도 깨진 파일을 받지 않음)
+        if has_upload:
+            tmp_apk = apk_path + '.tmp'
+            apk_file.save(tmp_apk)
+            os.replace(tmp_apk, apk_path)
+
+        # 3. version.json 덮어쓰기
+        version_info = {
+            "versionCode": int(version_code),
+            "versionName": version_name,
+        }
+        version_path = os.path.join(APK_FOLDER, VERSION_FILENAME)
+        tmp_version = version_path + '.tmp'
+        with open(tmp_version, 'w', encoding='utf-8') as f:
+            json.dump(version_info, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_version, version_path)
+
+        msg = 'APK 업로드 및 ' if has_upload else ''
+        flash(f'{msg}version.json 저장 완료 (versionCode={version_code}, versionName={version_name})', 'info')
+        return redirect(url_for('textCatch.textCatchApk'))
+
+    # GET: 현재 등록 정보 표시
+    apk_path = os.path.join(APK_FOLDER, APK_FILENAME)
+    apk_info = None
+    if os.path.exists(apk_path):
+        stat = os.stat(apk_path)
+        apk_info = {
+            "filename": APK_FILENAME,
+            "size_mb": f"{stat.st_size / 1024 / 1024:.2f}",
+            "updated_at": datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S'),
+        }
+
+    return render_template(
+        'textcatch/textcatch_apk.html',
+        version_info=_readApkVersion(),
+        apk_info=apk_info,
+        apk_folder=APK_FOLDER,
+    )
+
+
+# sha256 계산은 APK 전체를 읽어야 하므로 (경로, 수정시각, 크기)가 같으면 이전 결과를 재사용
+_apk_meta_cache = {}
+
+def _apkMeta(apk_path):
+    """APK 파일의 (sha256, size) 반환"""
+    stat = os.stat(apk_path)
+    cache_key = (apk_path, stat.st_mtime_ns, stat.st_size)
+    if cache_key not in _apk_meta_cache:
+        sha = hashlib.sha256()
+        with open(apk_path, 'rb') as f:
+            for chunk in iter(lambda: f.read(1024 * 1024), b''):
+                sha.update(chunk)
+        _apk_meta_cache.clear()
+        _apk_meta_cache[cache_key] = (sha.hexdigest(), stat.st_size)
+    return _apk_meta_cache[cache_key]
+
+
+@main_bp.route('/api/textcatch/version', methods=['GET'])
+def textCatchApkVersion():
+    """앱 업데이트 확인용: version.json + APK의 sha256/size/다운로드 url 을 합쳐서 반환 (로그인 불필요)"""
+    # curl http://localhost:5000/api/textcatch/version
+    version_path = os.path.join(APK_FOLDER, VERSION_FILENAME)
+    apk_path = os.path.join(APK_FOLDER, APK_FILENAME)
+    if not (os.path.exists(version_path) and os.path.exists(apk_path)):
+        abort(404)
+
+    info = _readApkVersion()
+    sha256, size = _apkMeta(apk_path)
+    info['url'] = url_for('textCatch.textCatchApkDownload', _external=True)
+    info['sha256'] = sha256
+    info['size'] = size
+    return jsonify(info)
+
+
+@main_bp.route('/api/textcatch/load', methods=['GET'])
+def textCatchApkDownload():
+    """APK 다운로드 (로그인 불필요)"""
+    # curl -O -J http://localhost:5000/api/textcatch/load
+    apk_path = os.path.join(APK_FOLDER, APK_FILENAME)
+    if not os.path.exists(apk_path):
+        abort(404)
+    return send_file(
+        apk_path,
+        mimetype='application/vnd.android.package-archive',
+        as_attachment=True,
+        download_name=APK_FILENAME,
+        conditional=True,   # Range 요청(이어받기) 지원
+    )
+
+
+# ------------------------------------------------------------------
+# 기프티콘 여부 판별 단어 관리 화면
+# ------------------------------------------------------------------
+GIFT_WORD_MAX_LEN = 128  # received_gift_word.word varchar(128)
+
+
+def _normUseYn(value):
+    """use_yn 값 보정 (Y/N 외에는 Y)"""
+    value = (value or 'Y').strip().upper()
+    return value if value in ('Y', 'N') else 'Y'
+
+
+GIFT_SCORE_MIN, GIFT_SCORE_MAX = -9999, 9999
+
+
+def _parseScore(value):
+    """score 값 보정 (빈 값은 1, 정수가 아니거나 범위를 벗어나면 None)"""
+    value = (value or '').strip()
+    if value == '':
+        return 1
+    try:
+        score = int(value)
+    except ValueError:
+        return None
+    return score if GIFT_SCORE_MIN <= score <= GIFT_SCORE_MAX else None
+
+
+def _redirectGiftWord():
+    """처리 후 같은 검색어로 목록 복귀"""
+    return redirect(url_for('textCatch.giftWordList', keyword=request.form.get('keyword', '')))
+
+
+@main_bp.route('/textcatch/gift_word', methods=['GET'])
+def giftWordList():
+    """기프티콘 판별 단어 목록 화면"""
+    keyword = (request.args.get('keyword') or '').strip()
+    words = getGiftWordList(keyword)
+    return render_template('textcatch/textcatch_gift_word.html', words=words, keyword=keyword)
+
+
+@main_bp.route('/textcatch/gift_word/add', methods=['POST'])
+def giftWordAdd():
+    """기프티콘 판별 단어 등록"""
+    word = (request.form.get('word') or '').strip()
+    use_yn = _normUseYn(request.form.get('use_yn'))
+    score = _parseScore(request.form.get('score'))
+
+    if not word:
+        flash('등록할 단어를 입력해 주세요.', 'error')
+    elif len(word) > GIFT_WORD_MAX_LEN:
+        flash(f'단어는 {GIFT_WORD_MAX_LEN}자 이하로 입력해 주세요.', 'error')
+    elif score is None:
+        flash(f'점수는 {GIFT_SCORE_MIN} ~ {GIFT_SCORE_MAX} 사이의 정수로 입력해 주세요.', 'error')
+    elif addGiftWord(word, use_yn, score):
+        flash(f"'{word}' 단어를 등록했습니다.", 'info')
+    else:
+        flash(f"'{word}' 는 이미 등록된 단어입니다.", 'error')
+
+    return _redirectGiftWord()
+
+
+@main_bp.route('/textcatch/gift_word/update', methods=['POST'])
+def giftWordUpdate():
+    """기프티콘 판별 단어 수정 (단어명 / 사용여부 / 점수)"""
+    org_word = (request.form.get('org_word') or '').strip()
+    word = (request.form.get('word') or '').strip()
+    use_yn = _normUseYn(request.form.get('use_yn'))
+    score = _parseScore(request.form.get('score'))
+
+    if not org_word or not word:
+        flash('수정할 단어를 입력해 주세요.', 'error')
+    elif len(word) > GIFT_WORD_MAX_LEN:
+        flash(f'단어는 {GIFT_WORD_MAX_LEN}자 이하로 입력해 주세요.', 'error')
+    elif score is None:
+        flash(f'점수는 {GIFT_SCORE_MIN} ~ {GIFT_SCORE_MAX} 사이의 정수로 입력해 주세요.', 'error')
+    else:
+        result = updateGiftWord(org_word, word, use_yn, score)
+        if result == 'ok':
+            flash(f"'{word}' 단어를 수정했습니다.", 'info')
+        elif result == 'dup':
+            flash(f"'{word}' 는 이미 등록된 단어입니다.", 'error')
+        else:
+            flash(f"'{org_word}' 단어를 찾을 수 없습니다.", 'error')
+
+    return _redirectGiftWord()
+
+
+@main_bp.route('/textcatch/gift_word/delete', methods=['POST'])
+def giftWordDelete():
+    """기프티콘 판별 단어 삭제 (단건/선택 다건)"""
+    words = [w.strip() for w in request.form.getlist('words') if w.strip()]
+
+    if not words:
+        flash('삭제할 단어를 선택해 주세요.', 'error')
+    else:
+        deleted = deleteGiftWord(words)
+        flash(f'{deleted}건을 삭제했습니다.', 'info')
+
+    return _redirectGiftWord()
+
+
+# ------------------------------------------------------------------
+# 수신 번호 관리 화면 (received_phone_list)
+# ------------------------------------------------------------------
+# 컬럼 길이 제한 (테이블 정의 기준)
+PHONE_MAX_LEN = {
+    'group_id': 32, 'receiver': 32, 'company': 32, 'custom_no': 64, 'pass_flag': 32, 'notes': 256,
+}
+PHONE_LABEL = {
+    'group_id': '그룹', 'receiver': '전화번호', 'company': '통신사', 'custom_no': '사설번호',
+    'pass_flag': '패스', 'notes': '메모',
+}
+
+
+def _readPhoneForm():
+    """
+    등록/수정 폼 값 읽기 + 검증.
+    반환 : (data, 오류메시지) — 오류가 없으면 메시지는 None
+    """
+    data = {c: (request.form.get(c) or '').strip() for c in PHONE_MAX_LEN}
+    # 전화번호는 숫자만 저장 (010-1234-5678 → 01012345678)
+    data['receiver'] = ''.join(ch for ch in data['receiver'] if ch.isdigit())
+    main_yn = (request.form.get('main_yn') or '').strip().upper()
+    data['main_yn'] = main_yn if main_yn in ('Y', 'N') else 'Y'
+
+    if not data['receiver']:
+        return data, '전화번호를 입력해 주세요.'
+    if not data['group_id']:
+        return data, '그룹을 입력해 주세요.'
+    for col, max_len in PHONE_MAX_LEN.items():
+        if len(data[col]) > max_len:
+            return data, f'{PHONE_LABEL[col]}: {max_len}자 이하로 입력해 주세요.'
+
+    # 빈 값은 NULL 로 저장 (pass_flag 는 테이블 기본값 '패스')
+    for col in ('company', 'custom_no', 'notes'):
+        data[col] = data[col] or None
+    data['pass_flag'] = data['pass_flag'] or '패스'
+    return data, None
+
+
+def _redirectPhone():
+    """처리 후 같은 검색 조건으로 목록 복귀"""
+    return redirect(url_for('textCatch.phoneList',
+                            keyword=request.form.get('keyword', ''),
+                            company=request.form.get('company_filter', '')))
+
+
+@main_bp.route('/textcatch/phone', methods=['GET'])
+def phoneList():
+    """수신 번호 목록 화면"""
+    keyword = (request.args.get('keyword') or '').strip()
+    company = (request.args.get('company') or '').strip()
+    phones = getPhoneList(keyword, company)
+    companies, pass_flags, next_group = getPhoneCodeList()
+    return render_template('textcatch/textcatch_phone.html', phones=phones, keyword=keyword, company=company,
+                           companies=companies, pass_flags=pass_flags, next_group=next_group)
+
+
+@main_bp.route('/textcatch/phone/add', methods=['POST'])
+def phoneAdd():
+    """수신 번호 등록"""
+    data, error = _readPhoneForm()
+    if error:
+        flash(error, 'error')
+    elif addPhone(data):
+        flash(f"'{data['receiver']}' 번호를 등록했습니다.", 'info')
+    else:
+        flash(f"'{data['receiver']}' 는 이미 등록된 번호입니다.", 'error')
+    return _redirectPhone()
+
+
+@main_bp.route('/textcatch/phone/update', methods=['POST'])
+def phoneUpdate():
+    """수신 번호 수정"""
+    org_receiver = (request.form.get('org_receiver') or '').strip()
+    data, error = _readPhoneForm()
+    if not org_receiver:
+        flash('수정할 번호를 찾을 수 없습니다.', 'error')
+    elif error:
+        flash(error, 'error')
+    else:
+        result = updatePhone(org_receiver, data)
+        if result == 'ok':
+            flash(f"'{data['receiver']}' 번호를 수정했습니다.", 'info')
+        elif result == 'dup':
+            flash(f"'{data['receiver']}' 는 이미 등록된 번호입니다.", 'error')
+        else:
+            flash(f"'{org_receiver}' 번호를 찾을 수 없습니다.", 'error')
+    return _redirectPhone()
+
+
+@main_bp.route('/textcatch/phone/delete', methods=['POST'])
+def phoneDelete():
+    """수신 번호 삭제 (단건/선택 다건)"""
+    receivers = [r.strip() for r in request.form.getlist('receivers') if r.strip()]
+    if not receivers:
+        flash('삭제할 번호를 선택해 주세요.', 'error')
+    else:
+        deleted = deletePhone(receivers)
+        flash(f'{deleted}건을 삭제했습니다.', 'info')
+    return _redirectPhone()
+
+
+# ------------------------------------------------------------------
+# 화면캡쳐 크롬 확장 프로그램 내려받기 (extension/textcatch_capture 폴더를 zip 으로 묶어 전달)
+#   http 접속에서는 브라우저 화면 공유가 막혀 있어 확장 프로그램으로 캡쳐함
+# ------------------------------------------------------------------
+CAPTURE_EXT_FOLDER = os.path.join(PROJECT_ROOT, 'extension', 'textcatch_capture')
+
+
+@main_bp.route('/textcatch/capture_extension.zip', methods=['GET'])
+def captureExtensionZip():
+    """확장 프로그램 폴더를 textcatch_capture/ 아래에 담은 zip 으로 내려줌"""
+    import io
+    import zipfile
+
+    if not os.path.isdir(CAPTURE_EXT_FOLDER):
+        abort(404)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for name in sorted(os.listdir(CAPTURE_EXT_FOLDER)):
+            path = os.path.join(CAPTURE_EXT_FOLDER, name)
+            if os.path.isfile(path):
+                zf.write(path, arcname=f'textcatch_capture/{name}')
+    buf.seek(0)
+    return send_file(buf, mimetype='application/zip', as_attachment=True,
+                     download_name='textcatch_capture.zip')
