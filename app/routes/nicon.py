@@ -1,3 +1,4 @@
+'''
 from flask import Blueprint, render_template
 
 from app.logics.nicon import get_nicon_sales_rows
@@ -17,3 +18,4 @@ def nicon_sales():
         error_message = f"데이터를 불러오지 못했습니다: {exc}"
 
     return render_template('nicon/nicon_sales.html', rows=rows, error_message=error_message)
+'''

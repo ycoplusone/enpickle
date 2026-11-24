@@ -1,3 +1,4 @@
+'''
 # /home/dlive/flask/app/views/user_views.py
 from flask import Blueprint, render_template
 from app.api import user_logic # user_logic 임포트
@@ -11,3 +12,4 @@ def user_list_page():
     # user_logic에서 실제 사용자 데이터를 가져옵니다.
     users_data = user_logic.get_all_users()
     return render_template('test/list.html', users=users_data)
+'''

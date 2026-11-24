@@ -1,3 +1,4 @@
+'''
 from flask import Blueprint, jsonify
 
 from app.logics.nicon import get_nicon_sales_rows
@@ -21,3 +22,4 @@ def get_nicon_sales_data():
             'error_message': f"데이터를 불러오지 못했습니다: {exc}",
         }), 500
 
+'''

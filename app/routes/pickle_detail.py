@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request
 
-from app.logics.pickle_detail import get_pickle_detail, normalize_ym
+from app.logics.pickle_detail import get_pickle_chart, get_pickle_detail, normalize_ym
 
 pickle_detail_bp = Blueprint('pickle_detail_bp', __name__)
 
@@ -11,4 +11,6 @@ def pickle_detail():
     base_mm = normalize_ym(request.args.get('base_mm'))
     groups, total = get_pickle_detail(base_mm)
     shown = sum(len(g['details']) for g in groups)
-    return render_template('marco/pickle_detail.html', base_mm=base_mm, groups=groups, total=total, shown=shown)
+    chart_data = get_pickle_chart(base_mm)
+    return render_template('marco/pickle_detail.html', base_mm=base_mm, groups=groups, total=total, shown=shown,
+                           chart_data=chart_data)

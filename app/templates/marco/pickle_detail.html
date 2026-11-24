@@ -26,6 +26,8 @@
     .st-y { color: #27ae60; font-weight: bold; }   /* 성공(완료) */
     .st-n { color: #e74c3c; font-weight: bold; }   /* 이상(미완료) */
     .no-data { padding: 40px; color: #999; }
+    /* 조회 년월 기준 등록/성공/이상 막대 그래프 */
+    .chart-wrap { width: 100%; height: 260px; margin-bottom: 14px; }
     /* 접기/펼치기: 작업(seq) 행 클릭 → 처리 기록(mi_seq) 행 표시 */
     .tool-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin-bottom: 8px; }
     .tool-row .total { margin: 0; }
@@ -71,6 +73,10 @@
             <button type="button" class="btn-toggle-all" data-open="0">모두 접기</button>
         </div>
     </div>
+
+    {% if chart_data.categories %}
+    <div id="chart-pickle" class="chart-wrap"></div>
+    {% endif %}
 
     <div class="table-scroll">
         <table class="detail-table table-cards">
@@ -180,6 +186,26 @@
             const open = btn.dataset.open === '1';
             document.querySelectorAll('tr.job-row').forEach((row) => setOpen(row, open));
         });
+    });
+})();
+</script>
+<script>
+// 조회 년월 기준 등록/성공/이상 일별 막대 그래프
+(function () {
+    const el = document.getElementById('chart-pickle');
+    if (!el || !window.toastui) return;
+    toastui.Chart.columnChart({
+        el: el,
+        data: {{ chart_data | tojson }},
+        options: {
+            chart: { title: '{{ base_mm }} 일별 처리 현황', width: 'auto', height: 260 },
+            xAxis: { title: '일' },
+            yAxis: { title: '건수' },
+            series: { dataLabels: { visible: true } },
+            legend: { align: 'top' },
+            theme: { series: { colors: ['#8e44ad', '#27ae60', '#e74c3c'] } },
+            exportMenu: { visible: false }
+        }
     });
 })();
 </script>

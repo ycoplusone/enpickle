@@ -51,6 +51,47 @@ def get_pickle_detail(base_mm: str, limit: int = 2000):
     return _group_by_seq(rows), total
 
 
+def get_pickle_chart(base_mm: str):
+    """
+    피클상세 막대 그래프 데이터 (toastui columnChart 형식)
+    조회 조건은 get_pickle_detail 과 동일 (marco_detail.created_at 년월 LIKE '입력값%')
+    x축 : 항상 일별(MM/DD) — 년도(YYYY) 조회여도 일 단위
+    series : 등록 수(처리 기록 전체), 성공 수(status='y'), 이상 수(status='n')
+    """
+    rows = db.session.execute(text("""
+        select 
+        d , sum(reg_cnt) reg_cnt , sum(t_cnt) t_cnt , sum(f_cnt) f_cnt
+        from (
+            select
+            DATE_FORMAT(a.created_at, '%m/%d') AS d
+            , count(1) reg_cnt
+            , 0 t_cnt
+            , 0 f_cnt
+            from marco_info a
+            where DATE_FORMAT(a.created_at, '%Y%m') LIKE :base_mm
+            and a.flag = 'pickle'
+            group by 1
+            union all
+            SELECT DATE_FORMAT(a.created_at, '%m/%d') AS d
+                , 0 AS reg_cnt
+                , SUM(CASE WHEN a.status = 'y' THEN 1 ELSE 0 END) AS t_cnt
+                , SUM(CASE WHEN a.status = 'n' THEN 1 ELSE 0 END) AS f_cnt
+            FROM marco_detail a
+            WHERE DATE_FORMAT(a.created_at, '%Y%m') LIKE :base_mm
+            group by 1
+        ) a
+        group by 1
+    """), {'base_mm': f'{base_mm}%'}).mappings().all()
+    return {
+        'categories': [r['d'] for r in rows],
+        'series': [
+            {'name': '등록', 'data': [int(r['reg_cnt'] or 0) for r in rows]},
+            {'name': '성공', 'data': [int(r['t_cnt'] or 0) for r in rows]},
+            {'name': '이상', 'data': [int(r['f_cnt'] or 0) for r in rows]},
+        ],
+    }
+
+
 JOB_COLS = ('seq', 'flag', 'job_nm', 'url', 'due_dt', 'ann_dt', 'event_nm', 'prize_nm', 'prize_cnt')
 DETAIL_COLS = ('detail_seq', 'mi_seq', 'phone_number', 'status', 'etc', 'created_at')
 
