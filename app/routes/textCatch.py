@@ -4,7 +4,6 @@ import mimetypes
 import hashlib
 import uuid
 from flask import Blueprint, json, render_template,Flask, request, jsonify, send_from_directory, send_file, abort, flash, redirect, url_for
-from app.logics.home import get_remaining_collection_count, get_last7_job_counts
 from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
 
