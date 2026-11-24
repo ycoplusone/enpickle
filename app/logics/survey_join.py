@@ -29,6 +29,7 @@ def get_survey_chart_data(base_mm: str):
         COUNT(DISTINCT CONCAT(job_nm, DATE_FORMAT(job_st_dt, '%Y%m%d'))) AS cnt 
         FROM marco_info 
         WHERE DATE_FORMAT(job_st_dt, '%Y%m%d') LIKE '{base_mm}%' 
+        and flag = 'human'
         GROUP BY DATE_FORMAT(job_st_dt, '%H시') 
         ORDER BY 1 
     """
@@ -48,6 +49,7 @@ def get_survey_chart_data(base_mm: str):
             COUNT(DISTINCT CONCAT(job_nm, DATE_FORMAT(job_st_dt, '%Y%m%d'))) AS cnt 
          FROM marco_info 
          WHERE DATE_FORMAT(job_st_dt, '%Y%m%d') LIKE '{base_mm}%' 
+         and flag = 'human'
          GROUP BY DATE_FORMAT(job_st_dt, '%m/%d') 
          ORDER BY 1
         """
@@ -67,6 +69,7 @@ def get_survey_chart_data(base_mm: str):
         COUNT(DISTINCT CONCAT(job_nm, DATE_FORMAT(job_st_dt, '%Y%m%d'))) AS cnt 
     FROM marco_info 
     WHERE DATE_FORMAT(job_st_dt, '%Y') LIKE '{base_mm}%'
+    and flag = 'human'
     GROUP BY DATE_FORMAT(job_st_dt, '%m') 
     ORDER BY DATE_FORMAT(job_st_dt, '%m') 
     """
