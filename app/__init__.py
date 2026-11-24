@@ -79,8 +79,8 @@ def create_app():
     from .routes.home import main_bp
     app.register_blueprint(main_bp) # test 화면
 
-    from .routes.nicon import nicon_bp
-    app.register_blueprint(nicon_bp) # nicon_bp 등록
+    #from .routes.nicon import nicon_bp
+    #app.register_blueprint(nicon_bp) # nicon_bp 등록
 
 
     from .routes.survey_join import survey_join

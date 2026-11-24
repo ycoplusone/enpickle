@@ -1,3 +1,4 @@
+'''
 from sqlalchemy import text
 
 from app import db
@@ -29,3 +30,4 @@ def get_nicon_sales_rows():
     print(text(query))
     r = [row._asdict() for row in result]
     return r
+'''

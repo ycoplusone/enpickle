@@ -13,6 +13,7 @@ survey_join = Blueprint('survey_join', __name__)
 
 @survey_join.route('/survey_join', methods=['GET', 'POST'])
 def survey_join1():
+    '''참여 통계 '''
     base_mm = normalize_base_mm(request.values.get('base_mm', '').strip())
     url = request.values.get('url', '%')
 

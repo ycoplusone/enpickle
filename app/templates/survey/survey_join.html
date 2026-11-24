@@ -265,12 +265,12 @@
           <th>URL</th>
           <th>구분</th>
           <th>우선순위</th>
-          <th class="th-sort" id="th-due" title="클릭하면 마감일 순으로 정렬 (빠른 순 ↔ 늦은 순)">마감일 <span class="sort-mark">↕</span></th>
+          <th class="th-sort" id="th-due" data-key="due" title="클릭하면 마감일 순으로 정렬 (빠른 순 ↔ 늦은 순)">마감일 <span class="sort-mark">↕</span></th>
           <th>발표일</th>
           <th>상품</th>
           <th>갯수</th>
           <th>기타</th>
-          <th>시작 시간</th>
+          <th class="th-sort" id="th-st" data-key="st" title="클릭하면 시작 시간 순으로 정렬 (빠른 순 ↔ 늦은 순)">시작 시간 <span class="sort-mark">↕</span></th>
           <th>종료 시간</th>
           <th>시작 횟수</th>
           <th>완료 횟수</th>
@@ -286,7 +286,7 @@
           {% else %}
           <tr class="js-job-row" title="클릭하면 위 입력란에서 수정"
               data-job-nm="{{ row.job_nm or '' }}" data-url="{{ row.url or '' }}" data-flag="{{ row.flag or 'human' }}" data-sort="{{ row.sort if row.sort is not none else 2 }}"
-              data-due="{{ (row.due_dt or '')[:8] }}" data-ann="{{ row.ann_dt or '' }}"
+              data-due="{{ (row.due_dt or '')[:8] }}" data-st="{{ row.st_dt or '' }}" data-ann="{{ row.ann_dt or '' }}"
               data-prize="{{ row.prize_nm or '' }}" data-cnt="{{ row.prize_cnt or '' }}" data-etc="{{ row.etc or '' }}">
           {% endif %}
             <td class="cell-title" data-label="작업명">{{ row.job_nm }}</td>
@@ -447,32 +447,38 @@
   })();
 </script>
 <script>
-// 마감일 헤더 클릭 → 화면에서만 정렬 (빠른 순 → 늦은 순 → 원래 순서), Total 행은 항상 맨 위, 마감일 없는 행은 맨 아래
+// 정렬 헤더(마감일, 시작 시간) 클릭 → 화면에서만 정렬 (빠른 순 → 늦은 순 → 원래 순서)
+// Total 행은 항상 맨 위, 값이 없는 행은 맨 아래. 다른 헤더를 누르면 이전 헤더 표시는 초기화
 (function () {
-  const th = document.getElementById('th-due');
+  const ths = Array.from(document.querySelectorAll('#surveyTable th.th-sort[data-key]'));
   const tbody = document.querySelector('#surveyTable tbody');
-  if (!th || !tbody) return;
+  if (!ths.length || !tbody) return;
   const rows = Array.from(tbody.querySelectorAll('tr.js-job-row'));
   rows.forEach((tr, i) => { tr.dataset.orgIdx = i; });   // 원래(조회) 순서 기억
-  const mark = th.querySelector('.sort-mark');
   const STATES = ['asc', 'desc', ''];
-  let state = '';
+  let curKey = '', state = '';
 
-  th.addEventListener('click', () => {
-    state = STATES[(STATES.indexOf(state) + 1) % STATES.length];
-    th.classList.toggle('asc', state === 'asc');
-    th.classList.toggle('desc', state === 'desc');
-    mark.textContent = state === 'asc' ? '▲' : state === 'desc' ? '▼' : '↕';
+  const paint = (th, s) => {
+    th.classList.toggle('asc', s === 'asc');
+    th.classList.toggle('desc', s === 'desc');
+    th.querySelector('.sort-mark').textContent = s === 'asc' ? '▲' : s === 'desc' ? '▼' : '↕';
+  };
+
+  ths.forEach(th => th.addEventListener('click', () => {
+    const key = th.dataset.key;
+    state = key === curKey ? STATES[(STATES.indexOf(state) + 1) % STATES.length] : 'asc';
+    curKey = key;
+    ths.forEach(o => paint(o, o === th ? state : ''));
 
     const sorted = rows.slice().sort((a, b) => {
       if (!state) return a.dataset.orgIdx - b.dataset.orgIdx;
-      const da = a.dataset.due || '', db = b.dataset.due || '';
-      if (!da !== !db) return da ? -1 : 1;                 // 마감일 없는 행은 항상 뒤
-      const cmp = da.localeCompare(db) * (state === 'asc' ? 1 : -1);
-      return cmp || a.dataset.orgIdx - b.dataset.orgIdx;   // 같은 마감일은 원래 순서
+      const va = a.dataset[key] || '', vb = b.dataset[key] || '';
+      if (!va !== !vb) return va ? -1 : 1;                 // 값 없는 행은 항상 뒤
+      const cmp = va.localeCompare(vb) * (state === 'asc' ? 1 : -1);
+      return cmp || a.dataset.orgIdx - b.dataset.orgIdx;   // 같은 값은 원래 순서
     });
     sorted.forEach(tr => tbody.appendChild(tr));            // Total 등 다른 행은 제자리(맨 위) 유지
-  });
+  }));
 })();
 </script>
 {% endblock %}
