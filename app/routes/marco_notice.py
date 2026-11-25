@@ -30,7 +30,7 @@ def marco_notice():
 @marco_notice_bp.route('/marco_notice/latest', methods=['GET'])
 def marco_notice_latest():
     """
-    가장 최근 공지(seq 최대) 1건의 내용을 일반 텍스트(text/plain)로 반환 (메뉴 미등록)
+    가장 최근 공지(seq 최대) 1건의 내용을 일반 텍스트(text/plain)로 반환 (메뉴 미등록, 로그인 인증 제외)
     """
     # 공지 내용만 일반 텍스트로 그대로 출력 (줄바꿈·따옴표 원문 유지), 공지가 없으면 빈 응답
     return Response(get_latest_notice() or '', mimetype='text/plain')   # Flask 가 charset=utf-8 을 자동으로 붙임
