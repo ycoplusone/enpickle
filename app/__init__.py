@@ -23,7 +23,7 @@ def create_app():
     def check_device_auth():
         # 로그인 페이지나 정적 파일(CSS 등) 접근 시에는 체크 건너뛰기
         print(f"request.endpoint : {request.endpoint}")
-        if request.endpoint in ['loging_bp.login', 'static','textCatch.receive_message','textCatch.TextCatch','textCatch.textCatchApkVersion','textCatch.textCatchApkDownload','job_log_bp.job_log','survey_info_bp.survey_info_bare','job_log_bp.survey_marco','marco_phone_bp.marco_phone','marco_phone_bp.marco_phone_done']:
+        if request.endpoint in ['loging_bp.login', 'static','textCatch.receive_message','textCatch.TextCatch','textCatch.textCatchApkVersion','textCatch.textCatchApkDownload','job_log_bp.job_log','survey_info_bp.survey_info_bare','job_log_bp.survey_marco','marco_phone_bp.marco_phone','marco_phone_bp.marco_phone_done','marco_qna_bp.marco_qna','marco_qna_bp.marco_qna_question']:
             return
 
         # 브라우저 쿠키에서 device_token 가져오기
@@ -117,6 +117,12 @@ def create_app():
 
     from .routes.pickle_detail import pickle_detail_bp
     app.register_blueprint(pickle_detail_bp) # 피클상세 (marco_detail + marco_info)
+
+    from .routes.marco_notice import marco_notice_bp
+    app.register_blueprint(marco_notice_bp) # 피클 공지 (marco_notice 입력 + 이력, 로그인 필요)
+
+    from .routes.marco_qna import marco_qna_bp
+    app.register_blueprint(marco_qna_bp) # 피클 질문/답변 (marco_qna 전화번호 기준, 로그인 필요)
 
     # routes - end
 

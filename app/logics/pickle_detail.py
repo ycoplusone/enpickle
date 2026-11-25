@@ -41,6 +41,7 @@ def get_pickle_detail(base_mm: str, limit: int = 2000):
              , b.event_nm
              , b.prize_nm
              , b.prize_cnt
+             , b.phone_number AS reg_phone   -- 작업 등록 전화번호 (marco_info.phone_number, /survey_marco)
              , a.etc
              , a.status
              , a.created_at
@@ -92,7 +93,7 @@ def get_pickle_chart(base_mm: str):
     }
 
 
-JOB_COLS = ('seq', 'flag', 'job_nm', 'url', 'due_dt', 'ann_dt', 'event_nm', 'prize_nm', 'prize_cnt')
+JOB_COLS = ('seq', 'flag', 'job_nm', 'url', 'due_dt', 'ann_dt', 'event_nm', 'prize_nm', 'prize_cnt', 'reg_phone')
 DETAIL_COLS = ('detail_seq', 'mi_seq', 'phone_number', 'status', 'etc', 'created_at')
 
 

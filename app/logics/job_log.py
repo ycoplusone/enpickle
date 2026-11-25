@@ -86,20 +86,23 @@ def macro_job_log(job_nm: str, url_path: str, flag: str, marco_flag: str = 'huma
     marco_flag : 새 행을 만들 때 저장할 marco_info.flag ('human' 기본 / 'pickle' 은 /survey_marco API)
     sort       : marco_info.sort 값 (새 행을 만들 때만 저장, 기본 2)
     due_dt     : marco_info.due_dt 마감일자 'YYYYMMDD' (새 행을 만들 때만 저장, 없으면 NULL)
-    extra      : 새 행을 만들 때만 저장하는 추가 항목 {ann_dt, prize_nm, prize_cnt, event_nm, etc} (없으면 NULL)
+    extra      : 새 행을 만들 때만 저장하는 추가 항목 {ann_dt, prize_nm, prize_cnt, event_nm, etc, phone_number} (없으면 NULL)
+                 phone_number : /survey_marco 는 값이 없으면 '' (공백) 으로 넘김 → marco_info / temp_marco_info 동일 저장
     """
     job_nm = _sanitize(job_nm)
     url_path = _sanitize(url_path)
     extra = extra or {}
-    extra_params = {k: extra.get(k) for k in ('ann_dt', 'prize_nm', 'prize_cnt', 'event_nm', 'etc')}
+    extra_params = {k: extra.get(k) for k in ('ann_dt', 'prize_nm', 'prize_cnt', 'event_nm', 'etc', 'phone_number')}
 
     with marco_url_lock(url_path):
         seq = find_marco_seq(url_path)
         if seq and (flag or '').upper() == 'Z':
             # 중복 url + flag Z → temp_marco_info 에 보관 (marco_info 는 변경 없음)
             db.session.execute(text("""
-                INSERT INTO temp_marco_info (job_nm, url, flag, sort, due_dt, ann_dt, prize_nm, prize_cnt, event_nm, etc)
-                VALUES (:job_nm, :url_path, :marco_flag, :sort, :due_dt, :ann_dt, :prize_nm, :prize_cnt, :event_nm, :etc)
+                INSERT INTO temp_marco_info (job_nm, url, flag, sort, due_dt, ann_dt, prize_nm, prize_cnt, event_nm, etc,
+                                             phone_number)
+                VALUES (:job_nm, :url_path, :marco_flag, :sort, :due_dt, :ann_dt, :prize_nm, :prize_cnt, :event_nm, :etc,
+                        :phone_number)
             """), {'job_nm': job_nm, 'url_path': url_path, 'marco_flag': marco_flag,
                    'sort': sort, 'due_dt': due_dt, **extra_params})
         elif seq:
@@ -111,9 +114,9 @@ def macro_job_log(job_nm: str, url_path: str, flag: str, marco_flag: str = 'huma
         else:
             db.session.execute(text("""
                 INSERT INTO marco_info (job_nm, url, job_st_dt, job_ed_dt, job_st_cnt, job_ed_cnt, flag, sort, due_dt,
-                                        ann_dt, prize_nm, prize_cnt, event_nm, etc)
+                                        ann_dt, prize_nm, prize_cnt, event_nm, etc, phone_number)
                 VALUES (:job_nm, :url_path, NOW(), NOW(), 1, 0, :marco_flag, :sort, :due_dt,
-                        :ann_dt, :prize_nm, :prize_cnt, :event_nm, :etc)
+                        :ann_dt, :prize_nm, :prize_cnt, :event_nm, :etc, :phone_number)
             """), {'job_nm': job_nm, 'url_path': url_path, 'marco_flag': marco_flag,
                    'sort': sort, 'due_dt': due_dt, **extra_params})
         db.session.commit()

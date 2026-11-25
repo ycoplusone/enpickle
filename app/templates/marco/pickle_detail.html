@@ -46,6 +46,7 @@
     .sub-table th { background: #f3eef6; font-size: 12px; }
     .sub-table td.etc { text-align: left; }
     .sub-table td.phone { font-family: monospace; }
+    .detail-table td.phone { font-family: monospace; }   /* 작업 행의 등록 번호 */
     @media (max-width: 700px) {
         .detail-table { table-layout: auto; }
         tr.detail-row.open { display: block; }
@@ -84,6 +85,7 @@
                 <col style="width: 36px;">   {# 접기/펼치기 #}
                 <col style="width: 60px;">   {# seq #}
                 <col style="width: 60px;">   {# 구분 #}
+                <col style="width: 120px;">  {# 등록 번호 #}
                 <col>                        {# 작업명 #}
                 <col style="width: 17%;">    {# URL #}
                 <col style="width: 80px;">   {# 마감일 #}
@@ -99,6 +101,7 @@
                     <th></th>
                     <th>seq</th>
                     <th>구분</th>
+                    <th>등록 번호</th>
                     <th>작업명</th>
                     <th>URL</th>
                     <th>마감일</th>
@@ -119,6 +122,7 @@
                     <td data-label="펼치기"><span class="caret">▶</span></td>
                     <td data-label="seq"><b>{{ g.seq }}</b></td>
                     <td data-label="구분"><span class="flag-{{ g.flag }}">{{ g.flag or '-' }}</span></td>
+                    <td data-label="등록 번호" class="phone">{{ g.reg_phone or '-' }}</td>
                     <td class="job-nm" data-label="작업명">{{ g.job_nm or '' }}</td>
                     <td class="url" data-label="URL">
                         {% if g.url %}<a href="{{ g.url if '://' in g.url else 'https://' ~ g.url }}" target="_blank" rel="noopener" title="{{ g.url }}">{{ g.url }}</a>{% else %}-{% endif %}
@@ -136,7 +140,7 @@
                 </tr>
                 {# 자식 행: 처리 기록(marco_detail, mi_seq = seq) #}
                 <tr class="detail-row" data-parent="{{ g.seq }}">
-                    <td colspan="12">
+                    <td colspan="13">
                         <table class="table table-sm table-bordered sub-table">
                             <thead>
                                 <tr><th style="width:90px;">상세 No</th><th style="width:80px;">mi_seq</th><th style="width:130px;">전화번호</th><th style="width:80px;">처리구분</th><th>비고</th><th style="width:150px;">처리일시</th></tr>
@@ -159,7 +163,7 @@
                     </td>
                 </tr>
                 {% else %}
-                <tr><td colspan="12" class="no-data">조회된 데이터가 없습니다.</td></tr>
+                <tr><td colspan="13" class="no-data">조회된 데이터가 없습니다.</td></tr>
                 {% endfor %}
             </tbody>
         </table>
