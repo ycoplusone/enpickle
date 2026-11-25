@@ -32,6 +32,7 @@ def survey_marco():
            prize_nm (선택: 상품, 64자) / prize_cnt (선택: 갯수, 64자) / event_nm (선택: 이벤트 종류, 64자) / etc (선택: 특이사항, 128자)
            phone_number (선택: 전화번호, 숫자만 저장, 최대 32자, 없으면 '' 공백) → marco_info / temp_marco_info 동일 저장
            ※ sort ~ phone_number 는 새 행을 만들 때만 저장 (같은 날 같은 url 재호출 시 기존 값 유지)
+    응답 : {"status": "ok", "seq": marco_info.seq}  (새로 등록했으면 새 seq, 이미 있는 url 이면 기존 seq)
     예) curl -X POST http://localhost:5000/survey_marco -d "job_nm=설문A" -d "url=https://example.com/s?id=1" -d "phone_number=01012345678"
     """
     data = request.get_json(silent=True) or {}
@@ -84,5 +85,5 @@ def survey_marco():
         return jsonify({'error': 'phone_number must be 32 characters or less'}), 400
     extra['phone_number'] = phone_number
 
-    macro_job_log(job_nm, url_path, flag, marco_flag='pickle', sort=sort, due_dt=due_dt, extra=extra)
-    return jsonify({'status': 'ok'})
+    seq = macro_job_log(job_nm, url_path, flag, marco_flag='pickle', sort=sort, due_dt=due_dt, extra=extra)
+    return jsonify({'status': 'ok', 'seq': seq})
