@@ -30,8 +30,9 @@ def survey_marco():
            due_dt (선택: 마감일자 YYYYMMDD / YYYY-MM-DD) → 새 행을 등록할 때 YYYYMMDD 로 저장 (시간은 버림)
            ann_dt (선택: 발표일자, due_dt 와 같은 형식)
            prize_nm (선택: 상품, 64자) / prize_cnt (선택: 갯수, 64자) / event_nm (선택: 이벤트 종류, 64자) / etc (선택: 특이사항, 128자)
-           ※ sort ~ etc 는 새 행을 만들 때만 저장 (같은 날 같은 url 재호출 시 기존 값 유지)
-    예) curl -X POST http://localhost:5000/survey_marco -d "job_nm=설문A" -d "url=https://example.com/s?id=1"
+           phone_number (선택: 전화번호, 숫자만 저장, 최대 32자, 없으면 '' 공백) → marco_info / temp_marco_info 동일 저장
+           ※ sort ~ phone_number 는 새 행을 만들 때만 저장 (같은 날 같은 url 재호출 시 기존 값 유지)
+    예) curl -X POST http://localhost:5000/survey_marco -d "job_nm=설문A" -d "url=https://example.com/s?id=1" -d "phone_number=01012345678"
     """
     data = request.get_json(silent=True) or {}
     job_nm = request.values.get('job_nm') or data.get('job_nm')
@@ -75,6 +76,13 @@ def survey_marco():
         if len(v) > max_len:
             return jsonify({'error': f'{name} must be {max_len} characters or less'}), 400
         extra[name] = v or None
+
+    # 전화번호: 숫자만 남김 (010-1234-5678 → 01012345678), 없으면 '' (공백)
+    phone_raw = _get('phone_number')
+    phone_number = ''.join(ch for ch in str(phone_raw or '') if ch.isdigit())
+    if len(phone_number) > 32:
+        return jsonify({'error': 'phone_number must be 32 characters or less'}), 400
+    extra['phone_number'] = phone_number
 
     macro_job_log(job_nm, url_path, flag, marco_flag='pickle', sort=sort, due_dt=due_dt, extra=extra)
     return jsonify({'status': 'ok'})

@@ -3,26 +3,25 @@
 <div class="nav-links">
 
 
-	<a href="/survey_join" 		class="{{ 'active' if request.path == '/survey_join' 	else '' }}"><span class="icon">📢</span><span class="nav-label">참여 통계</span></a>
-	<a href="/survey_info?is_verified=N" 		class="{{ 'active' if request.path == '/survey_info' 	else '' }}"><span class="icon">📊</span><span class="nav-label">수집 데이터 관리</span></a>
-	<a href="/survey_words" 	class="{{ 'active' if request.path == '/survey_words' 	else '' }}"><span class="icon">🔑</span><span class="nav-label">검색 키워드 관리</span></a>
-	<a href="/target_words" 	class="{{ 'active' if request.path == '/target_words' 	else '' }}"><span class="icon">🎯</span><span class="nav-label">인식 단어 관리</span></a>
-	<a href="/exception_list" 	class="{{ 'active' if request.path == '/exception_list' else '' }}"><span class="icon">🧹</span><span class="nav-label">제외 단어 관리</span></a>
-	<a href="/temp_marco_info" 	class="{{ 'active' if request.path == '/temp_marco_info' else '' }}"><span class="icon">🔁</span><span class="nav-label">중복 등록 url</span></a>
-	<a href="/pickle_detail" 	class="{{ 'active' if request.path == '/pickle_detail' else '' }}"><span class="icon">🥒</span><span class="nav-label">피클상세</span></a>		
-	<a href="/survey_info/bare?is_verified=N" target="_blank" rel="noopener" title="메뉴 없는 화면 (새 탭)"><span class="icon">🗂️</span><span class="nav-label">수집 데이터(단독)</span></a>
-	<a href="/marco_phone" target="_blank" rel="noopener" title="메뉴 없는 화면 (새 탭)"><span class="icon">📞</span><span class="nav-label">전화번호별 작업</span></a>	
+
 </div>
 	{# APK 관리 오른쪽 메뉴: ☰ 버튼을 누르면 아래로 펼쳐짐 #}
-	<!--div class="nav-more">
+	<div class="nav-more">
 		<button type="button" class="nav-more-btn" aria-expanded="false" aria-haspopup="true" title="메뉴 더보기"><span class="icon">☰</span><span class="nav-label">메뉴</span></button>
 		<div class="nav-more-panel">
+		<a href="/survey_join" 		class="{{ 'active' if request.path == '/survey_join' 	else '' }}"><span class="icon">📢</span><span class="nav-label">참여 통계</span></a>
+		<a href="/survey_info?is_verified=N" 		class="{{ 'active' if request.path == '/survey_info' 	else '' }}"><span class="icon">📊</span><span class="nav-label">수집 데이터 관리</span></a>
+		<a href="/survey_words" 	class="{{ 'active' if request.path == '/survey_words' 	else '' }}"><span class="icon">🔑</span><span class="nav-label">검색 키워드 관리</span></a>
+		<a href="/target_words" 	class="{{ 'active' if request.path == '/target_words' 	else '' }}"><span class="icon">🎯</span><span class="nav-label">인식 단어 관리</span></a>
+		<a href="/exception_list" 	class="{{ 'active' if request.path == '/exception_list' else '' }}"><span class="icon">🧹</span><span class="nav-label">제외 단어 관리</span></a>
 		<a href="/temp_marco_info" 	class="{{ 'active' if request.path == '/temp_marco_info' else '' }}"><span class="icon">🔁</span><span class="nav-label">중복 등록 url</span></a>
 		<a href="/pickle_detail" 	class="{{ 'active' if request.path == '/pickle_detail' else '' }}"><span class="icon">🥒</span><span class="nav-label">피클상세</span></a>		
+		<a href="/marco_notice" 	class="{{ 'active' if request.path == '/marco_notice' else '' }}"><span class="icon">📌</span><span class="nav-label">피클 공지</span></a>
+		<a href="/marco_qna/admin" 	class="{{ 'active' if request.path == '/marco_qna/admin' else '' }}"><span class="icon">🛠️</span><span class="nav-label">질문/답변 관리</span></a>
 		<a href="/survey_info/bare?is_verified=N" target="_blank" rel="noopener" title="메뉴 없는 화면 (새 탭)"><span class="icon">🗂️</span><span class="nav-label">수집 데이터(단독)</span></a>
-		<a href="/marco_phone" target="_blank" rel="noopener" title="메뉴 없는 화면 (새 탭)"><span class="icon">📞</span><span class="nav-label">전화번호별 작업</span></a>
+		<a href="/marco_phone" target="_blank" rel="noopener" title="메뉴 없는 화면 (새 탭)"><span class="icon">📞</span><span class="nav-label">전화번호별 작업</span></a>	
 		</div>
-	</div-->
+	</div>
 </nav>
 <script>
 // 펼침 메뉴: 버튼 클릭 → 열기/닫기, 바깥 클릭·ESC → 닫기

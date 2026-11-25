@@ -5,7 +5,7 @@ from sqlalchemy import text
 from app import db
 
 
-def get_marco_by_phone(phone: str, limit: int = 25):
+def get_marco_by_phone(phone: str, limit: int = 100):
     """
     pickle 매크로 작업(marco_info.flag = 'pickle') 중 이 전화번호가 아직 하지 않은 작업 목록
       - 이미 한 작업 = marco_detail 에 (mi_seq, phone_number) 가 있는 작업 → 제외
