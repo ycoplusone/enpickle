@@ -1,0 +1,61 @@
+{% extends "base_bare.html" %}
+{# 테스트용 설문 (독립 화면, 로그인 불필요). 새로고침마다 문항/문구가 랜덤으로 바뀜 #}
+
+{% block content %}
+<style>
+    .st-wrap { max-width: 720px; margin: 30px auto; padding: 0 16px; }
+    .st-title { font-size: 22px; font-weight: bold; margin-bottom: 6px; }
+    .st-intro { font-size: 14px; color: #666; margin-bottom: 14px; }
+    .st-progress { height: 6px; background: #eee; border-radius: 3px; margin-bottom: 6px; }
+    .st-progress > div { height: 100%; background: #2980b9; border-radius: 3px; }
+    .st-page { font-size: 12px; color: #888; margin-bottom: 18px; text-align: right; }
+    .st-error { padding: 10px 14px; margin-bottom: 14px; background: #fdecea; color: #c0392b; border-radius: 4px; font-size: 14px; }
+    .st-q { padding: 16px 18px; margin-bottom: 14px; border: 1px solid #e3e3e3; border-radius: 6px; background: #fff; }
+    .st-q-text { font-weight: bold; margin-bottom: 10px; }
+    .st-q-text .no { color: #2980b9; margin-right: 4px; }
+    .st-q-hint { font-size: 12px; color: #999; font-weight: normal; margin-left: 4px; }
+    .st-opts { display: flex; flex-direction: column; gap: 6px; }
+    .st-opts.scale { flex-direction: row; flex-wrap: wrap; }
+    .st-opts.scale label { flex: 1 1 0; min-width: 90px; justify-content: center; text-align: center; }
+    .st-opts label { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; margin: 0; font-size: 14px; }
+    .st-opts label:hover { background: #f4f9fd; }
+    .st-btns { display: flex; justify-content: flex-end; margin-top: 20px; }
+    .st-btn { padding: 10px 28px; border: none; border-radius: 4px; background: #2980b9; color: #fff; font-weight: bold; cursor: pointer; }
+    .st-btn:hover { background: #1f6391; }
+    @media (max-width: 600px) { .st-opts.scale { flex-direction: column; } }
+</style>
+
+<div class="st-wrap">
+    <div class="st-title">{{ title }}</div>
+    <div class="st-intro">{{ intro }}</div>
+    <div class="st-progress"><div style="width: {{ 50 * page }}%"></div></div>
+    <div class="st-page">{{ page }} / 2 페이지</div>
+
+    {% if error %}<div class="st-error">{{ error }}</div>{% endif %}
+
+    <form method="post" id="survey-form">
+        {% for q in questions %}
+        <div class="st-q" data-qid="{{ q.id }}">
+            <div class="st-q-text">
+                <span class="no">Q{{ q.no }}.</span>{{ q.text }}
+                {% if q.type == 'multi' %}<span class="st-q-hint">(복수 선택)</span>{% endif %}
+            </div>
+            <div class="st-opts {{ 'scale' if q.type == 'scale' }}">
+                {% for o in q.options %}
+                <label>
+                    <input type="{{ 'checkbox' if q.type == 'multi' else 'radio' }}"
+                           name="{{ q.slot }}" value="{{ o.value }}"
+                           {% if o.value in values.get(q.slot, []) %}checked{% endif %}>
+                    {{ o.label }}
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+
+        <div class="st-btns">
+            <button type="submit" class="st-btn" id="btn-submit">{{ '다음' if page == 1 else '완료' }}</button>
+        </div>
+    </form>
+</div>
+{% endblock %}
