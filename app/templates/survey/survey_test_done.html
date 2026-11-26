@@ -1,0 +1,17 @@
+{% extends "base_bare.html" %}
+
+{% block content %}
+<style>
+    .st-wrap { max-width: 720px; margin: 60px auto; padding: 0 16px; text-align: center; }
+    .st-done { font-size: 22px; font-weight: bold; margin-bottom: 10px; }
+    .st-desc { color: #666; margin-bottom: 24px; }
+    .st-wrap a { color: #2980b9; }
+</style>
+<div class="st-wrap">
+    <div class="st-done" id="survey-done">설문이 완료되었습니다.</div>
+    <div class="st-desc">소중한 응답 감사합니다. (응답번호: {{ response_id }})</div>
+    <a href="{{ url_for('survey_test_bp.survey_test_page1', survey_no=survey_no) }}">다시 응답하기</a>
+    &nbsp;|&nbsp;
+    <a href="{{ url_for('survey_test_bp.survey_test_list') }}">설문 목록</a>
+</div>
+{% endblock %}

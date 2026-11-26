@@ -1,0 +1,18 @@
+{% extends "base_bare.html" %}
+
+{% block content %}
+<style>
+    .st-wrap { max-width: 720px; margin: 40px auto; padding: 0 16px; }
+    .st-wrap h4 { margin-bottom: 16px; }
+    .st-item { display: block; padding: 14px 18px; margin-bottom: 10px; border: 1px solid #e3e3e3; border-radius: 6px; color: #333; text-decoration: none; }
+    .st-item:hover { background: #f4f9fd; }
+</style>
+<div class="st-wrap">
+    <h4>테스트용 설문조사</h4>
+    {% for s in surveys %}
+    <a class="st-item" href="{{ url_for('survey_test_bp.survey_test_page1', survey_no=s.no) }}">
+        설문 {{ s.no }}. {{ s.title }} (2페이지 · 8문항)
+    </a>
+    {% endfor %}
+</div>
+{% endblock %}

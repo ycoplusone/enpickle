@@ -23,7 +23,7 @@ def create_app():
     def check_device_auth():
         # 로그인 페이지나 정적 파일(CSS 등) 접근 시에는 체크 건너뛰기
         print(f"request.endpoint : {request.endpoint}")
-        if request.endpoint in ['loging_bp.login', 'static','textCatch.receive_message','textCatch.TextCatch','textCatch.textCatchApkVersion','textCatch.textCatchApkDownload','job_log_bp.job_log','survey_info_bp.survey_info_bare','job_log_bp.survey_marco','marco_phone_bp.marco_phone','marco_phone_bp.marco_phone_done','marco_qna_bp.marco_qna','marco_qna_bp.marco_qna_question','marco_notice_bp.marco_notice_latest']:
+        if request.endpoint in ['loging_bp.login', 'static','textCatch.receive_message','textCatch.TextCatch','textCatch.textCatchApkVersion','textCatch.textCatchApkDownload','job_log_bp.job_log','survey_info_bp.survey_info_bare','job_log_bp.survey_marco','marco_phone_bp.marco_phone','marco_phone_bp.marco_phone_done','marco_qna_bp.marco_qna','marco_qna_bp.marco_qna_question','marco_notice_bp.marco_notice_latest','survey_test_bp.survey_test_list','survey_test_bp.survey_test_page1','survey_test_bp.survey_test_page2','survey_test_bp.survey_test_done']:
             return
 
         # 브라우저 쿠키에서 device_token 가져오기
@@ -123,6 +123,9 @@ def create_app():
 
     from .routes.marco_qna import marco_qna_bp
     app.register_blueprint(marco_qna_bp) # 피클 질문/답변 (marco_qna 전화번호 기준, 로그인 필요)
+
+    from .routes.survey_test import survey_test_bp
+    app.register_blueprint(survey_test_bp) # 테스트용 설문 2종 (survey_test 저장, 로그인 불필요)
 
     # routes - end
 
