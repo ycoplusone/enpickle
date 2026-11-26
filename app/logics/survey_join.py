@@ -1,5 +1,5 @@
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy import text
 
@@ -19,66 +19,61 @@ def normalize_base_mm(base_mm: str) -> str:
     return base_mm
 
 
+def _st_dt_cond(base_mm: str, col: str = 'job_st_dt', fmt: str = '%Y%m%d'):
+    """
+    조회 조건(앞자리 검색)을 SQL 조건 + 파라미터로 변환
+      - YYYY / YYYYMM / YYYYMMDD 형식이면 기간 조건(col >= 시작 AND col < 끝) → job_st_dt 인덱스 사용 가능
+      - 그 외 입력은 기존과 같은 DATE_FORMAT(col, fmt) LIKE '입력값%' (파라미터 바인딩)
+    """
+    digits = base_mm if base_mm.isdigit() else ''
+    try:
+        if len(digits) == 4 and fmt in ('%Y%m%d', '%Y'):
+            st = datetime(int(digits), 1, 1)
+            ed = datetime(st.year + 1, 1, 1)
+        elif len(digits) == 6 and fmt == '%Y%m%d':
+            st = datetime(int(digits[:4]), int(digits[4:6]), 1)
+            ed = datetime(st.year + (st.month == 12), st.month % 12 + 1, 1)
+        elif len(digits) == 8 and fmt == '%Y%m%d':
+            st = datetime.strptime(digits, '%Y%m%d')
+            ed = st + timedelta(days=1)
+        else:
+            raise ValueError
+        return f'{col} >= :st AND {col} < :ed', {'st': st, 'ed': ed}
+    except ValueError:
+        return f"DATE_FORMAT({col}, '{fmt}') LIKE :base_like", {'base_like': f'{base_mm}%'}
+
+
+def _chart_rows(label_sql: str, cond: str, params: dict) -> dict:
+    """flag='human' 작업의 (작업명+일자) 고유 건수를 label 별로 집계 → toastui lineChart 데이터"""
+    rows = db.session.execute(text(f"""
+        SELECT {label_sql} AS label,
+               COUNT(DISTINCT job_nm, DATE(job_st_dt)) AS cnt
+        FROM marco_info
+        WHERE flag = 'human'
+          AND {cond}
+        GROUP BY 1
+        ORDER BY 1
+    """), params).mappings()
+    data = {'categories': [], 'series': [{'name': '개수', 'data': []}]}
+    for row in rows:
+        data['categories'].append(row['label'])
+        data['series'][0]['data'].append(int(row['cnt']))
+    return data
+
+
 def get_survey_chart_data(base_mm: str):
+    """
+    참여 통계 차트 (시간별 / 일별 / 월별), flag = 'human' 기준
+    - 조회 조건을 기간 조건으로 바꿔 job_st_dt 인덱스를 탈 수 있게 함 (기존: DATE_FORMAT(...) LIKE → 전체 스캔)
+    - 입력값은 바인딩 파라미터로 전달 (기존 f-string 직접 삽입 제거)
+    - 월별은 기존과 동일하게 '년도' 가 입력값으로 시작하는 범위 (예: 2026 → 2026년 1~12월)
+    """
     base_mm = normalize_base_mm(base_mm)
-    params = {'base_mm': f'{base_mm}%'}
-    
-    # 시간별
-    hour_sql = f"""
-        SELECT DATE_FORMAT(job_st_dt, '%H시') AS h, 
-        COUNT(DISTINCT CONCAT(job_nm, DATE_FORMAT(job_st_dt, '%Y%m%d'))) AS cnt 
-        FROM marco_info 
-        WHERE DATE_FORMAT(job_st_dt, '%Y%m%d') LIKE '{base_mm}%' 
-        and flag = 'human'
-        GROUP BY DATE_FORMAT(job_st_dt, '%H시') 
-        ORDER BY 1 
-    """
-    hour_result = db.session.execute(text(hour_sql))
-    sales_data = {'categories': [], 'series': [{'name': '개수', 'data': []}]}
-    
-    for row in hour_result.mappings():
-        sales_data['categories'].append(row['h'])
-        sales_data['series'][0]['data'].append(int(row['cnt']))    
-    
-    
-    
-    # 일별
-    day_sql = f"""
-         SELECT 
-            DATE_FORMAT(job_st_dt, '%m/%d') AS d, 
-            COUNT(DISTINCT CONCAT(job_nm, DATE_FORMAT(job_st_dt, '%Y%m%d'))) AS cnt 
-         FROM marco_info 
-         WHERE DATE_FORMAT(job_st_dt, '%Y%m%d') LIKE '{base_mm}%' 
-         and flag = 'human'
-         GROUP BY DATE_FORMAT(job_st_dt, '%m/%d') 
-         ORDER BY 1
-        """
-    
-    day_result = db.session.execute(text(day_sql))    
-    expense_data = {'categories': [], 'series': [{'name': '개수', 'data': []}]}        
-    for row in day_result.mappings():
-        expense_data['categories'].append(row['d'])
-        expense_data['series'][0]['data'].append(int(row['cnt']))
-
-
-
-    # 월별
-    month_sql = f"""
-    SELECT 
-        DATE_FORMAT(job_st_dt, '%m') AS d, 
-        COUNT(DISTINCT CONCAT(job_nm, DATE_FORMAT(job_st_dt, '%Y%m%d'))) AS cnt 
-    FROM marco_info 
-    WHERE DATE_FORMAT(job_st_dt, '%Y') LIKE '{base_mm}%'
-    and flag = 'human'
-    GROUP BY DATE_FORMAT(job_st_dt, '%m') 
-    ORDER BY DATE_FORMAT(job_st_dt, '%m') 
-    """
-    month_result = db.session.execute( text(month_sql) )
-    months_data = {'categories': [], 'series': [{'name': '개수', 'data': []}]}
-    for row in month_result.mappings():
-        months_data['categories'].append(row['d'])
-        months_data['series'][0]['data'].append(int(row['cnt']))
-
+    cond, params = _st_dt_cond(base_mm)
+    sales_data = _chart_rows("DATE_FORMAT(job_st_dt, '%H시')", cond, params)     # 시간별
+    expense_data = _chart_rows("DATE_FORMAT(job_st_dt, '%m/%d')", cond, params)  # 일별
+    m_cond, m_params = _st_dt_cond(base_mm, fmt='%Y')
+    months_data = _chart_rows("DATE_FORMAT(job_st_dt, '%m')", m_cond, m_params)  # 월별
     return sales_data, expense_data, months_data
 
 

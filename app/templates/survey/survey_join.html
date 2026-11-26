@@ -264,7 +264,7 @@
           <th>작업명</th>
           <th>URL</th>
           <th>구분</th>
-          <th>우선순위</th>
+          <th class="th-sort" id="th-sort" data-key="sort" data-type="num" title="클릭하면 우선순위 순으로 정렬 (낮은 순 ↔ 높은 순)">우선순위 <span class="sort-mark">↕</span></th>
           <th class="th-sort" id="th-due" data-key="due" title="클릭하면 마감일 순으로 정렬 (빠른 순 ↔ 늦은 순)">마감일 <span class="sort-mark">↕</span></th>
           <th>발표일</th>
           <th>상품</th>
@@ -327,52 +327,42 @@
 {% block script %}
 
 <script>
-  const salesData = {{ sales_data | tojson | safe}};  
-
-  const salesChart = toastui.Chart.lineChart({
-    el: document.getElementById('chart-sales'),
-    data: salesData,
-    options: {
-      chart: { title: '시간별', width: 'auto', height: 200 },
-      xAxis: { type: 'category' },
-      yAxis: { title: '개수' },
-      series: { showDot: true, dataLabels: { visible: true, offsetY: -10 } },
-      legend: { align: 'top', selectable: false, visible: false },
-      exportMenu: { visible: false }
-    }
-  });
-</script>  
-<script>
-
-  const expenseData = {{ expense_data | tojson | safe }};
-  const expenseChart = toastui.Chart.lineChart({
-    el: document.getElementById('chart-expense'),
-    data: expenseData,
-    options: {
-      chart: { title: '일별', width: 'auto', height: 200 },
-      xAxis: { type: 'category' },
-      yAxis: { title: '개수' },
-      series: { showDot: true, dataLabels: { visible: true, offsetY: -10 } },
-      legend: { align: 'top', selectable: false, visible: false },
-      exportMenu: { visible: false }
-    }
-  });
-
-  </script>  
-<script>
-  const monthsData = {{ months_data | tojson | safe }};
-  const monthsChart = toastui.Chart.lineChart({
-    el: document.getElementById('chart-months'),
-    data: monthsData,
-    options: {
-      chart: { title: '월별', width: 'auto', height: 200 },
-      xAxis: { type: 'category' },
-      yAxis: { title: '개수' },
-      series: { showDot: true, dataLabels: { visible: true, offsetY: -10 } },
-      legend: { align: 'top', selectable: false, visible: false },
-      exportMenu: { visible: false }
-    }
-  });
+  // 참여 통계 차트 (시간별 / 일별 / 월별)
+  // - 표/버튼 동작을 막지 않도록 첫 화면을 그린 뒤(requestAnimationFrame) 순서대로 생성
+  // - 점이 많으면(일별 1년치 등) 값 표시·점 표시를 끄고 마우스 오버(툴팁)로만 확인 → 렌더링 부담 감소
+  (function () {
+    if (!window.toastui) return;
+    const LABEL_MAX = 31;   // 이 개수 이하일 때만 값/점 표시
+    const charts = [
+      ['chart-sales',   '시간별', {{ sales_data | tojson }}],
+      ['chart-expense', '일별',   {{ expense_data | tojson }}],
+      ['chart-months',  '월별',   {{ months_data | tojson }}],
+    ];
+    const draw = ([id, title, data]) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const few = (data.categories || []).length <= LABEL_MAX;
+      toastui.Chart.lineChart({
+        el: el,
+        data: data,
+        options: {
+          chart: { title: title, width: 'auto', height: 200, animation: false },
+          xAxis: { type: 'category' },
+          yAxis: { title: '개수' },
+          series: { showDot: few, dataLabels: { visible: few, offsetY: -10 } },
+          legend: { align: 'top', selectable: false, visible: false },
+          exportMenu: { visible: false }
+        }
+      });
+    };
+    const next = () => {
+      const c = charts.shift();
+      if (!c) return;
+      try { draw(c); } catch (e) { console.error(e); }   // 한 차트 오류가 나머지를 막지 않게
+      requestAnimationFrame(next);
+    };
+    requestAnimationFrame(next);
+  })();
 </script>
 <script>
   // 작업 등록/수정: 표의 행 클릭 → 입력란에 채우고 수정 모드
@@ -447,7 +437,7 @@
   })();
 </script>
 <script>
-// 정렬 헤더(마감일, 시작 시간) 클릭 → 화면에서만 정렬 (빠른 순 → 늦은 순 → 원래 순서)
+// 정렬 헤더(우선순위, 마감일, 시작 시간) 클릭 → 화면에서만 정렬 (빠른 순 → 늦은 순 → 원래 순서)
 // Total 행은 항상 맨 위, 값이 없는 행은 맨 아래. 다른 헤더를 누르면 이전 헤더 표시는 초기화
 (function () {
   const ths = Array.from(document.querySelectorAll('#surveyTable th.th-sort[data-key]'));
@@ -466,15 +456,17 @@
 
   ths.forEach(th => th.addEventListener('click', () => {
     const key = th.dataset.key;
+    const isNum = th.dataset.type === 'num';                // data-type="num" 헤더(우선순위)는 숫자로 비교
     state = key === curKey ? STATES[(STATES.indexOf(state) + 1) % STATES.length] : 'asc';
     curKey = key;
     ths.forEach(o => paint(o, o === th ? state : ''));
 
     const sorted = rows.slice().sort((a, b) => {
       if (!state) return a.dataset.orgIdx - b.dataset.orgIdx;
-      const va = a.dataset[key] || '', vb = b.dataset[key] || '';
+      const va = (a.dataset[key] || '').trim(), vb = (b.dataset[key] || '').trim();
       if (!va !== !vb) return va ? -1 : 1;                 // 값 없는 행은 항상 뒤
-      const cmp = va.localeCompare(vb) * (state === 'asc' ? 1 : -1);
+      const cmp = (isNum ? (parseFloat(va) || 0) - (parseFloat(vb) || 0)   // 숫자 비교 (2 < 10)
+                         : va.localeCompare(vb)) * (state === 'asc' ? 1 : -1);
       return cmp || a.dataset.orgIdx - b.dataset.orgIdx;   // 같은 값은 원래 순서
     });
     sorted.forEach(tr => tbody.appendChild(tr));            // Total 등 다른 행은 제자리(맨 위) 유지
