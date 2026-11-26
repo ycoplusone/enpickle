@@ -123,7 +123,7 @@
                 <tr>
                     <td data-label="No">{{ row.seq }}</td>
                     <td class="job-nm cell-block" data-label="작업명">{{ row.job_nm or '' }}</td>
-                    <td data-label="이벤트 종류">{{ row.event_nm or '-' }}</td>
+                    <td data-label="이벤트 종류">{{ row.event_nm or '-' }} <span class="sort">({{ row.sort }})</span></td>
                     <td class="prize" data-label="상품">{{ row.prize_nm or '-' }}</td>
                     <td data-label="갯수">{{ row.prize_cnt or '-' }}</td>
                     <td data-label="마감일자" class="dt">

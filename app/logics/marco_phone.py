@@ -46,9 +46,9 @@ def get_marco_by_phone(phone: str, limit: int = 100):
              , a.event_nm                  -- 이벤트 종류
              , a.etc                       -- 특이사항
     """ + base + """
-        ORDER BY (a.due_dt IS NULL OR TRIM(a.due_dt) = '') ASC   -- 마감일 없는 건은 맨 뒤
-               , a.due_dt ASC                            -- 마감일 빠른 순 (YYYYMMDD 문자열 비교)
-               , COALESCE(a.sort, 2) ASC                 -- 같은 마감일이면 우선순위 낮은 순
+        ORDER BY COALESCE(a.sort, 2) ASC                 -- 같은 마감일이면 우선순위 낮은 순
+               , (a.due_dt IS NULL OR TRIM(a.due_dt) = '') ASC   -- 마감일 없는 건은 맨 뒤
+               , a.due_dt ASC                            -- 마감일 빠른 순 (YYYYMMDD 문자열 비교)                
                , a.seq DESC                              -- 그다음 최근 등록 순
                , a.prize_cnt desc
         LIMIT :limit
