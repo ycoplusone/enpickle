@@ -138,7 +138,7 @@ def get_survey_table_rows(base_mm: str, url: str):
     return [dict(row) for row in result.mappings()]
 
 
-MARCO_FLAGS = ('human', 'pickle', 'none')   # 화면 등록/수정에서 쓸 수 있는 구분 (ai 는 pickle 로 대체, none = 사용 안 함)
+MARCO_FLAGS = ('human', 'pickle', 'endream', 'none')   # 화면 등록/수정에서 쓸 수 있는 구분 (ai 는 pickle 로 대체, none = 사용 안 함)
 
 
 # 등록/수정 화면의 추가 항목 (모두 선택, 빈 값은 NULL)

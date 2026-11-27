@@ -9,6 +9,7 @@ def get_marco_by_phone(phone: str, limit: int = 100):
     """
     pickle 매크로 작업(marco_info.flag = 'pickle') 중 이 전화번호가 아직 하지 않은 작업 목록
       - 이미 한 작업 = marco_detail 에 (mi_seq, phone_number) 가 있는 작업 → 제외
+        (단, 처리구분이 'a' 재수행으로 바뀐 기록은 다시 표시)
       - 마감일(due_dt)이 지난 작업 → 제외 (마감일 없는 작업은 표시)
     phone : 숫자만 남겨 비교 (010-1234-5678 → 01012345678)
     반환  : (rows, total) 마감일 빠른 순(없으면 뒤) → 우선순위 낮은 순 → 최근 등록 순, 최대 limit 건
@@ -24,6 +25,7 @@ def get_marco_by_phone(phone: str, limit: int = 100):
                 SELECT mi_seq
                 FROM marco_detail
                 WHERE phone_number = :phone
+                  AND (status IS NULL OR status <> 'a')   -- 재수행(a) 은 다시 할 작업
           )
           -- 마감일 지난 건 제외 (마감일 NULL/공백은 표시, 오늘 마감은 표시)
           AND (a.due_dt IS NULL OR TRIM(a.due_dt) = '' OR LEFT(a.due_dt, 8) >= :today)
@@ -63,11 +65,25 @@ def set_marco_done(seq: int, phone: str, status: str = 'y', etc: str = None) -> 
     - status : 'y' 완료, 'n' 미완료(이상건)  /  etc : 비고 (최대 256자)
     - flag = 'pickle' 인 작업만 허용
     - 이미 기록된 건은 다시 넣지 않음 (버튼 연타/새로고침 대비)
+    - 재수행(a) 으로 바뀐 기록이 있으면 새로 넣지 않고 그 기록을 새 결과(status, etc, 처리일시)로 갱신
     반환 : 새로 기록했으면 True
     """
     digits = ''.join(ch for ch in (phone or '') if ch.isdigit())
     if not digits or not seq:
         return False
+
+    redo = db.session.execute(text("""
+        UPDATE marco_detail d
+        JOIN marco_info a ON (a.seq = d.mi_seq)
+        SET d.status = :status, d.etc = :etc, d.created_at = NOW()
+        WHERE d.mi_seq = :seq
+          AND d.phone_number = :phone
+          AND d.status = 'a'
+          AND a.flag = 'pickle'
+    """), {'seq': seq, 'phone': digits, 'status': status, 'etc': etc})
+    if redo.rowcount > 0:
+        db.session.commit()
+        return True
 
     result = db.session.execute(text("""
         INSERT INTO marco_detail (mi_seq, phone_number, created_at, status, etc)

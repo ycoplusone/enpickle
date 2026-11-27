@@ -6,15 +6,34 @@ from app import db
 
 
 def normalize_ym(base_mm: str) -> str:
-    """조회 년월: 숫자만 남김 (2026 / 202611 / 2026-11 → 2026 / 202611 / 202611), 없으면 올해"""
+    """조회 년월: 숫자만 남김 (2026 / 202611 / 2026-11 → 2026 / 202611 / 202611), 없으면 당년당월(YYYYMM)"""
     digits = ''.join(ch for ch in (base_mm or '') if ch.isdigit())[:6]
-    return digits or datetime.now().strftime('%Y')
+    return digits or datetime.now().strftime('%Y%m')
 
 
-def get_pickle_detail(base_mm: str, limit: int = 2000):
+PICKLE_FLAGS = ('pickle', 'endream')   # 구분 필터에서 고를 수 있는 값 (빈 값 = 전체)
+
+
+def normalize_flag(flag) -> str:
     """
-    피클상세: 처리완료 기록(marco_detail) + 작업 정보(marco_info)
+    구분 필터 (기본값 pickle)
+      - 파라미터 없음(메뉴로 처음 진입) 또는 허용되지 않는 값 → 'pickle'
+      - 빈 값(화면에서 '전체' 선택, flag=) → '' = 전체
+      - pickle / endream → 그대로
+    """
+    if flag is None:
+        return 'pickle'
+    flag = flag.strip().lower()
+    if flag == '':
+        return ''
+    return flag if flag in PICKLE_FLAGS else 'pickle'
+
+
+def get_pickle_detail(base_mm: str, flag: str = '', limit: int = 2000):
+    """
+    작업상세: 처리완료 기록(marco_detail) + 작업 정보(marco_info)
     조회 조건 : marco_detail.created_at 의 년월(YYYYMM) LIKE '입력값%'  (2026 → 2026년 전체, 202611 → 2026년 11월)
+               flag 가 있으면 marco_info.flag = flag (pickle / endream), 없으면 전체
     반환 : (groups, total)  처리 기록 최대 limit 건을 작업(b.seq) 단위로 묶은 목록
            groups = [{seq, flag, job_nm, ..., t_cnt 성공 수, f_cnt 이상 수, last_at 최근 처리일시,
                       details: [{detail_seq, mi_seq, phone_number, status, etc, created_at}, ...]}, ...]
@@ -26,6 +45,9 @@ def get_pickle_detail(base_mm: str, limit: int = 2000):
         WHERE DATE_FORMAT(a.created_at, '%Y%m') LIKE :base_mm
     """
     params = {'base_mm': f'{base_mm}%'}
+    if flag:
+        base += "  AND b.flag = :flag\n"
+        params['flag'] = flag
 
     total = db.session.execute(text("SELECT COUNT(*) " + base), params).scalar() or 0
     rows = db.session.execute(text("""
@@ -52,13 +74,19 @@ def get_pickle_detail(base_mm: str, limit: int = 2000):
     return _group_by_seq(rows), total
 
 
-def get_pickle_chart(base_mm: str):
+def get_pickle_chart(base_mm: str, flag: str = ''):
     """
-    피클상세 막대 그래프 데이터 (toastui columnChart 형식)
+    작업상세 막대 그래프 데이터 (toastui columnChart 형식)
     조회 조건은 get_pickle_detail 과 동일 (marco_detail.created_at 년월 LIKE '입력값%')
     x축 : 항상 일별(MM/DD) — 년도(YYYY) 조회여도 일 단위
     series : 등록 수(처리 기록 전체), 성공 수(status='y'), 이상 수(status='n')
+    flag   : 있으면 등록 수·성공/이상 수 모두 그 구분(marco_info.flag) 작업만,
+             없으면(전체) 기존과 같이 등록 수는 pickle, 성공/이상 수는 전체 처리 기록
     """
+    reg_flag = flag or 'pickle'
+    detail_cond = ''
+    if flag:
+        detail_cond = "AND EXISTS (SELECT 1 FROM marco_info b WHERE b.seq = a.mi_seq AND b.flag = :flag)"
     rows = db.session.execute(text("""
         select 
         d , sum(reg_cnt) reg_cnt , sum(t_cnt) t_cnt , sum(f_cnt) f_cnt
@@ -70,7 +98,7 @@ def get_pickle_chart(base_mm: str):
             , 0 f_cnt
             from marco_info a
             where DATE_FORMAT(a.created_at, '%Y%m') LIKE :base_mm
-            and a.flag = 'pickle'
+            and a.flag = :reg_flag
             group by 1
             union all
             SELECT DATE_FORMAT(a.created_at, '%m/%d') AS d
@@ -79,10 +107,11 @@ def get_pickle_chart(base_mm: str):
                 , SUM(CASE WHEN a.status = 'n' THEN 1 ELSE 0 END) AS f_cnt
             FROM marco_detail a
             WHERE DATE_FORMAT(a.created_at, '%Y%m') LIKE :base_mm
+            """ + detail_cond + """
             group by 1
         ) a
         group by 1
-    """), {'base_mm': f'{base_mm}%'}).mappings().all()
+    """), {'base_mm': f'{base_mm}%', 'reg_flag': reg_flag, 'flag': flag}).mappings().all()
     return {
         'categories': [r['d'] for r in rows],
         'series': [
@@ -91,6 +120,32 @@ def get_pickle_chart(base_mm: str):
             {'name': '이상', 'data': [int(r['f_cnt'] or 0) for r in rows]},
         ],
     }
+
+
+def set_detail_redo(detail_seq: int) -> bool:
+    """
+    처리 기록(marco_detail) 처리구분 변경: 'y' 성공 / 'n' 이상 → 'a' 재수행
+    - 'a' 로 바뀐 기록은 /marco_phone 목록에 다시 나오고, 다시 처리하면 그 기록이 새 결과로 갱신됨
+    - 변경하면 해당 작업(marco_info, seq = mi_seq)의 job_ed_cnt 를 50 으로 변경 (같은 트랜잭션)
+    반환 : 변경했으면 True (이미 'a' 이거나 없는 기록이면 False, 이때 marco_info 도 그대로)
+    """
+    result = db.session.execute(text("""
+        UPDATE marco_detail
+        SET status = 'a'
+        WHERE seq = :seq
+          AND status IN ('y', 'n')
+    """), {'seq': detail_seq})
+    if result.rowcount == 0:
+        db.session.rollback()
+        return False
+
+    db.session.execute(text("""
+        UPDATE marco_info
+        SET job_ed_cnt = 50
+        WHERE seq = (SELECT mi_seq FROM marco_detail WHERE seq = :seq)
+    """), {'seq': detail_seq})
+    db.session.commit()
+    return True
 
 
 JOB_COLS = ('seq', 'flag', 'job_nm', 'url', 'due_dt', 'ann_dt', 'event_nm', 'prize_nm', 'prize_cnt', 'reg_phone')
@@ -104,7 +159,7 @@ def _group_by_seq(rows):
         g = by_seq.get(r['seq'])
         if g is None:
             g = {k: r[k] for k in JOB_COLS}
-            g.update(details=[], t_cnt=0, f_cnt=0, last_at=None)
+            g.update(details=[], t_cnt=0, f_cnt=0, a_cnt=0, last_at=None)
             by_seq[r['seq']] = g
             groups.append(g)
         g['details'].append({k: r[k] for k in DETAIL_COLS})
@@ -112,6 +167,8 @@ def _group_by_seq(rows):
             g['t_cnt'] += 1
         elif r['status'] == 'n':
             g['f_cnt'] += 1
+        elif r['status'] == 'a':
+            g['a_cnt'] += 1
         if r['created_at'] and (g['last_at'] is None or r['created_at'] > g['last_at']):
             g['last_at'] = r['created_at']
     return groups
