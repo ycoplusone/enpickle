@@ -116,7 +116,7 @@ def create_app():
     app.register_blueprint(temp_marco_bp) # 중복 등록 url 리스트 (temp_marco_info)
 
     from .routes.pickle_detail import pickle_detail_bp
-    app.register_blueprint(pickle_detail_bp) # 피클상세 (marco_detail + marco_info)
+    app.register_blueprint(pickle_detail_bp) # 작업상세 (marco_detail + marco_info)
 
     from .routes.marco_notice import marco_notice_bp
     app.register_blueprint(marco_notice_bp) # 피클 공지 (marco_notice 입력 + 이력, 로그인 필요)
